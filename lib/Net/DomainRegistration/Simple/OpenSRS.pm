@@ -51,32 +51,33 @@ sub _setmaster {
 
 sub register {
     my ($self, %args) = @_;
-    # Check $args{domain}
-    # Check customer stuff
+    $self->_check_register(%args);
+    # XXX Massage contact stuff
     $self->_setmaster;
     $self->{srs}->register_domain($args{domain}, $args{billing});
 }
 
 sub renew {
     my ($self, %args) = @_;
-    # Check domain
-    # Check year
+    $self->_check_renew(%args);
     $self->_setmaster;
-    $self->{srs}->renew_domain($args{domain}, $args{year});
+    $self->{srs}->renew_domain($args{domain}, $args{years});
 }
 
 sub revoke {
     my ($self, %args) = @_;
     # Check domain
+    $self->_check_domain(%args);
     $self->_setmaster;
     $self->{srs}->revoke_domain($args{domain});
 }
 
 sub change_contact {
     my ($self, %args) = @_;
-    # Check domain
+    $self->_check_domain(%args);
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
     # Massage contact set into appropriate format
+    my $cs = $args{contacts};
 
     my $rv = $self->{srs}->make_request({
          action     => 'modify',
@@ -93,11 +94,37 @@ sub change_contact {
 
 sub set_nameservers {
     my ($self, %args) = @_;
-    # Check domain
+    $self->_check_set_nameservers(%args); 
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
-    # Get nameservers
-    # Create if necessary
+    # See what we have already
+    my $rv = $self->{srs}->make_request({
+         action     => 'get',
+         object     => 'nameserver',
+         attributes => { name => "all" }
+     });
+     return unless $rv->{is_success};
+     my %servers = map { $_->{name} => 1 } @{$rv->{attributes}{nameserver_list}};
+    for my $ns (@{$args{nameservers}}) {
+        next if $servers{$ns};
+        # else create
+        my $rv = $self->{srs}->make_request({
+             action     => 'create',
+             object     => 'nameserver',
+             attributes => { name => $ns, $self->_ipof($ns) }
+        });  
+        return unless $rv->{is_success};
+    } 
+        
     # advanced_update_nameservers
+    $rv = $self->{srs}->make_request({
+         action     => 'advanced_update_nameservers',
+         object     => 'nameserver',
+         attributes => { 
+            op_type => "assign",
+            assign_ns => @{$args{nameservers}}
+        }
+    });  
+    return $rv->{is_success}
 }
 
 1;

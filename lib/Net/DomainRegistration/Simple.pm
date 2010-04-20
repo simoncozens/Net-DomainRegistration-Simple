@@ -1,4 +1,5 @@
 package Net::DomainRegistration::Simple;
+use Socket;
 use Carp;
 use warnings;
 use strict;
@@ -87,6 +88,36 @@ sub new {
 for my $s (qw(register renew revoke change_contact set_nameservers)) {
     no strict;
     *$s = sub { my $thing = shift; die "$_ didn't provide a $s method!" };
+}
+
+sub _check_domain {
+    my ($self, %args) = @_;
+    croak "Need to specify a 'domain' argument" unless $args{domain}
+    # XXX More check
+}
+
+sub _check_register {
+    my ($self, %args) = @_;
+    $self->_check_domain(%args);
+    # XXX Check contact information
+}
+
+sub _check_renew {
+    my ($self, %args) = @_;
+    $self->_check_domain(%args);
+    croak "Must supply a 'years' argument" if !$args{years};
+}
+
+sub _check_set_nameservers {
+    my ($self, %args) = @_;
+    $self->_check_domain(%args);
+    croak "Nameservers argument should be an array reference"
+        unless ref $args{nameservers} eq "ARRAY";
+}
+
+sub _ipof {
+    my ($self, $name) = @_;
+    inet_ntoa(scalar gethostbyname($name));
 }
 
 =head1 AUTHOR
