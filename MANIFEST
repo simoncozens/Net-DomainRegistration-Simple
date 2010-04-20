@@ -1,0 +1,10 @@
+Changes
+MANIFEST
+Makefile.PL
+README
+lib/Net/DomainRegistration/Simple.pm
+lib/Net/DomainRegistration/Simple/Dummy.pm
+lib/Net/DomainRegistration/Simple/OpenSRS.pm
+t/00-load.t
+t/pod-coverage.t
+t/pod.t

@@ -1,0 +1,38 @@
+package Net::DomainRegistration::Simple::Dummy;
+use Carp;
+use strict;
+use warnings;
+use base "Net::DomainRegistration::Simple";
+
+=head1 NAME
+
+Net::DomainRegistration::Simple::Dummy - Adaptor that doesn't do anything
+
+=head1 SYNOPSIS
+
+    my $r = Net::DomainRegistration::Simple->new(
+        registrar => "Dummy",
+        environment => "live",
+        username => $u,
+        password => $p,
+    );
+    $r->register_domain( ... ); # NOTHING HAPPENS
+
+
+=head1 DESCRIPTION
+
+See L<Net::DomainRegistration::Simple> for methods. This module conforms
+to the interface but the methods don't do anything. Useful for testing
+and as a base module.
+
+=cut
+
+sub _specialize { }
+
+sub register { return 1 }
+sub renew { return 1 }
+sub revoke { return 1 }
+sub change_contact { return 1 }
+sub set_nameservers { return 1 }
+
+1;
