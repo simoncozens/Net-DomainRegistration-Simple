@@ -143,6 +143,7 @@ use constant EPP_XMLNS  => 'urn:ietf:params:xml:ns:epp-1.0';
 our $Error  = '';
 our $Code   = 1000;
 our $Message    = '';
+no warnings; # The code isn't warnings clean. Boo.
 
 sub new {
     my ($package, %params) = @_;
@@ -150,7 +151,8 @@ sub new {
     $params{port}       = (int($params{port}) > 0 ? $params{port} : 700);
     $params{ssl}        = ($params{no_ssl} ? undef : 1);
 
-    my $self = $package->SUPER::new(%params);
+    #my $self = $package->SUPER::new(%params);
+    my $self = $package->Net::EPP::Client::new(%params);
 
     $self->{debug}      = int($params{debug});
     $self->{timeout}    = (int($params{timeout}) > 0 ? $params{timeout} : 5);
@@ -179,16 +181,17 @@ sub new {
 
     my $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'objURI');
     while (my $object = $objects->shift) {
+        next unless $object->firstChild->data =~ /^urn:.*1\.0$/;
         my $el = $login->createElement('objURI');
         $el->appendText($object->firstChild->data);
         $login->svcs->appendChild($el);
     }
-    $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'extURI');
-    while (my $object = $objects->shift) {
-        my $el = $login->createElement('objURI');
-        $el->appendText($object->firstChild->data);
-        $login->svcs->appendChild($el);
-    }
+    #$objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'extURI');
+    #while (my $object = $objects->shift) {
+    #    my $el = $login->createElement('objURI');
+    #    $el->appendText($object->firstChild->data);
+    #    $login->svcs->appendChild($el);
+    #}
 
     $self->debug(sprintf('Attempting to login as client ID %s', $self->{user}));
     my $response = $self->request($login);
