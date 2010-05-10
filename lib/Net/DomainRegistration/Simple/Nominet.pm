@@ -31,7 +31,8 @@ overriding _epp_host.
 
 sub _epp_host {
     my $self = shift;
-    $self->{environment} eq "live" ? "epp.nominet.org.uk"
+    (defined $self->{environment} and $self->{environment} eq "live") 
+        ? "epp.nominet.org.uk"
         : "testbed-epp.nominet.org.uk";
 }
 
