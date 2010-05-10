@@ -173,12 +173,21 @@ sub new {
     $login->pw->appendText($params{pass});
 
     # Seriously, this is all we've added to this method.
-    my $option = $login->createElement("version");
-    $option->appendText("1.0");
-    $login->options->appendChild($option);
-    $option = $login->createElement("lang");
-    $option->appendText("en");
-    $login->options->appendChild($option);
+    my $option;
+    my $v = $login->can("version") ? $login->version : 
+        do { 
+            $option = $login->createElement("version");
+            $login->options->appendChild($option);
+            $option;
+        };
+    $v->appendText("1.0");
+
+    my $l = $login->can("lang") ? $login->lang : do {
+        $option = $login->createElement("lang");
+        $login->options->appendChild($option);
+        $option;
+    };
+    $l->appendText("en");
 
     my $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'objURI');
     while (my $object = $objects->shift) {
