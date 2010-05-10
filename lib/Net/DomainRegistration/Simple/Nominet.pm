@@ -126,7 +126,14 @@ sub set_nameservers {
     # $toadd needs to be added
  
     my $frame = Net::EPP::Frame::Command::Update::Domain->new();
-    $frame->setDomain($args{domain});
+
+    # setDomain doesn't work 
+    # (see http://code.google.com/p/perl-net-epp/issues/detail?id=1)
+    # so do it manually
+    my $name = $frame->createElement('domain:name');
+    $name->appendText($args{domain});
+    my $n = $frame->getNode('update')->getChildNodes->shift;
+    $n->insertBefore( $name, $n->firstChild );
 
     my $e = $frame->createElement("domain:ns");
     for (keys %toadd) {
