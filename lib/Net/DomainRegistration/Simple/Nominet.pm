@@ -103,37 +103,53 @@ sub change_contact {
 
 sub set_nameservers {
     my ($self, %args) = @_;
-    $self->_check_set_nameservers(%args); 
-    $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
-    # See what we have already
-    my $rv = $self->{srs}->make_request({
-         action     => 'get',
-         object     => 'nameserver',
-         attributes => { name => "all" }
-     });
-     return unless $rv->{is_success};
-     my %servers = map { $_->{name} => 1 } @{$rv->{attributes}{nameserver_list}};
+    $self->_check_set_nameservers(\%args); 
+
+    # Get the current ones.
+    my $info = $self->{epp}->domain_info($args{domain}) or return;
+    my %current = map {$_=>1} @{$info->{ns}};
+    my %toadd;
+
     for my $ns (@{$args{nameservers}}) {
-        next if $servers{$ns};
-        # else create
-        my $rv = $self->{srs}->make_request({
-             action     => 'create',
-             object     => 'nameserver',
-             attributes => { name => $ns, $self->_ipof($ns) }
-        });  
-        return unless $rv->{is_success};
+        next if delete $current{$ns};
+        $toadd{$ns}++;
+        if ($self->{epp}->check_host($ns) == 0) { next; }
+        # otherwise create the entry
+        # XXX Need to create a "superordinate host entry"
+        $self->{epp}->create_host({
+            'name' => $ns,
+            addrs => [{ version => "v4", addr => $self->_ip_f($ns) }]
+        }) or return;
     } 
-        
-    # advanced_update_nameservers
-    $rv = $self->{srs}->make_request({
-         action     => 'advanced_update_nameservers',
-         object     => 'nameserver',
-         attributes => { 
-            op_type => "assign",
-            assign_ns => @{$args{nameservers}}
-        }
-    });  
-    return $rv->{is_success}
+    
+    # What's left in $current needs to be deleted, and what's left in
+    # $toadd needs to be added
+ 
+    my $frame = Net::EPP::Frame::Command::Update::Domain->new();
+    $frame->setDomain($args{domain});
+
+    my $e = $frame->createElement("domain:ns");
+    for (keys %toadd) {
+        my $a = $frame->createElement("domain:hostObj");
+        s/\.$//;
+        $a->appendText($_);
+        $e->addChild($a);
+    }
+    #$frame->add->addChild($e);
+    #$frame->add->parentNode->removeChild($frame->add);
+    $frame->chg->parentNode->removeChild($frame->chg);
+    #$frame->rem->parentNode->removeChild($frame->rem);
+
+    $e = $frame->createElement("domain:ns");
+    for (keys %current) {
+        my $a = $frame->createElement("domain:hostObj");
+        s/\.$//;
+        $a->appendText($_);
+        $e->addChild($a);
+        last;
+    }
+    #$frame->rem->addChild($e);
+    $self->{epp}->request($frame);
 }
 
 # All this gubbins just to add a couple of "options" to the login frame
