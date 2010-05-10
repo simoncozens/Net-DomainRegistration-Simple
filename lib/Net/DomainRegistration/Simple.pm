@@ -91,28 +91,34 @@ for my $s (qw(register renew revoke change_contact set_nameservers)) {
 }
 
 sub _check_domain {
-    my ($self, %args) = @_;
-    croak "Need to specify a 'domain' argument" unless $args{domain}
+    my ($self, $args) = @_;
+    croak "Need to specify a 'domain' argument" unless $args->{domain};
+    $args->{domain} = lc $args->{domain};
+    $args->{domain} =~ s/\.$//;
     # XXX More check
 }
 
 sub _check_register {
-    my ($self, %args) = @_;
-    $self->_check_domain(%args);
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
     # XXX Check contact information
 }
 
 sub _check_renew {
-    my ($self, %args) = @_;
-    $self->_check_domain(%args);
-    croak "Must supply a 'years' argument" if !$args{years};
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
+    croak "Must supply a 'years' argument" if !$args->{years};
 }
 
 sub _check_set_nameservers {
-    my ($self, %args) = @_;
-    $self->_check_domain(%args);
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
     croak "Nameservers argument should be an array reference"
-        unless ref $args{nameservers} eq "ARRAY";
+        unless ref $args->{nameservers} eq "ARRAY";
+    for (@{$args->{nameservers}}) {
+        $_ = lc $_;
+        $_ .= "." unless /\.$/;
+    }
 }
 
 sub _ipof {

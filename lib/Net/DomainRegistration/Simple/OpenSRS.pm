@@ -51,7 +51,7 @@ sub _setmaster {
 
 sub register {
     my ($self, %args) = @_;
-    $self->_check_register(%args);
+    $self->_check_register(\%args);
     # XXX Massage contact stuff
     $self->_setmaster;
     $self->{srs}->register_domain($args{domain}, $args{billing});
@@ -59,7 +59,7 @@ sub register {
 
 sub renew {
     my ($self, %args) = @_;
-    $self->_check_renew(%args);
+    $self->_check_renew(\%args);
     $self->_setmaster;
     $self->{srs}->renew_domain($args{domain}, $args{years});
 }
@@ -67,14 +67,14 @@ sub renew {
 sub revoke {
     my ($self, %args) = @_;
     # Check domain
-    $self->_check_domain(%args);
+    $self->_check_domain(\%args);
     $self->_setmaster;
     $self->{srs}->revoke_domain($args{domain});
 }
 
 sub change_contact {
     my ($self, %args) = @_;
-    $self->_check_domain(%args);
+    $self->_check_domain(\%args);
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
     # Massage contact set into appropriate format
     my $cs = $args{contacts};
@@ -94,7 +94,7 @@ sub change_contact {
 
 sub set_nameservers {
     my ($self, %args) = @_;
-    $self->_check_set_nameservers(%args); 
+    $self->_check_set_nameservers(\%args); 
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
     # See what we have already
     my $rv = $self->{srs}->make_request({

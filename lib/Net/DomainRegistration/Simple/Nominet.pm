@@ -46,7 +46,7 @@ sub _specialize {
 
 sub register {
     my ($self, %args) = @_;
-    $self->_check_register(%args);
+    $self->_check_register(\%args);
     # XXX Create contact records
     my $t;
     my $a;
@@ -61,7 +61,7 @@ sub register {
 
 sub renew {
     my ($self, %args) = @_;
-    $self->_check_renew(%args);
+    $self->_check_renew(\%args);
     # Find current expiry date
     # Check it's within 6months
     
@@ -75,14 +75,14 @@ sub renew {
 sub revoke {
     my ($self, %args) = @_;
     # Check domain
-    $self->_check_domain(%args);
+    $self->_check_domain(\%args);
     $self->_setmaster;
     $self->{srs}->revoke_domain($args{domain});
 }
 
 sub change_contact {
     my ($self, %args) = @_;
-    $self->_check_domain(%args);
+    $self->_check_domain(\%args);
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
     # Massage contact set into appropriate format
     my $cs = $args{contacts};
