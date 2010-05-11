@@ -45,6 +45,11 @@ sub _specialize {
     );
 }
 
+sub is_available {
+    my ($self, $domain) = @_;
+    $self->{epp}->check_domain($domain);
+}
+
 sub register {
     my ($self, %args) = @_;
     $self->_check_register(\%args);

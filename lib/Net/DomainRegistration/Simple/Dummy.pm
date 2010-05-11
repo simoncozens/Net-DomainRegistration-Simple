@@ -30,6 +30,7 @@ and as a base module.
 sub _specialize { }
 
 sub register { return 1 }
+sub is_available { return 1 }
 sub renew { return 1 }
 sub revoke { return 1 }
 sub change_contact { return 1 }
