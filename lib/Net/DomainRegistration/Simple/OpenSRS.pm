@@ -49,6 +49,12 @@ sub _setmaster {
                       );
 }
 
+sub is_available {
+    my ($self, $domain) = @_;
+    $self->_setmaster;
+    $self->{srs}->is_available($domain);
+}
+
 sub register {
     my ($self, %args) = @_;
     $self->_check_register(\%args);

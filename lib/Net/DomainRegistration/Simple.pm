@@ -85,7 +85,7 @@ sub new {
 
 =cut
 
-for my $s (qw(register renew revoke change_contact set_nameservers)) {
+for my $s (qw(register renew revoke change_contact set_nameservers is_available)) {
     no strict;
     *$s = sub { my $thing = shift; die "$_ didn't provide a $s method!" };
 }
