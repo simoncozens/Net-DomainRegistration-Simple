@@ -52,11 +52,18 @@ sub register {
     my $t;
     my $a;
     my $b;
+
+    for my $ns (@{$args{nameservers}}) {
+        $self->_ensure_host($ns) or return;
+    }
+
     $self->{epp}->create_domain({
         name => $args{domain},
         registrant => $args{registrant} || $self->{other_auth}{registrar_contact_id},
         contacts => { tech => $t, admin => $a, billing => $b },
         status => "clientTransferProhibited", 
+        ns => [ @{$args{nameservers}} ], 
+        hosts => [ @{$args{nameservers}} ] 
     });
 }
 
@@ -86,6 +93,15 @@ sub change_contact {
     # XXX
 }
 
+sub _ensure_host {
+    my ($self, $host) = @_;
+    if ($self->{epp}->check_host($host) == 0) { return 1; }
+    $self->{epp}->create_host({
+        'name' => $host,
+        addrs => [{ version => "v4", addr => $self->_ip_of($host) }]
+    });
+}
+
 sub set_nameservers {
     my ($self, %args) = @_;
     $self->_check_set_nameservers(\%args); 
@@ -98,13 +114,8 @@ sub set_nameservers {
     for my $ns (@{$args{nameservers}}) {
         next if delete $current{$ns};
         $toadd{$ns}++;
-        if ($self->{epp}->check_host($ns) == 0) { next; }
-        # otherwise create the entry
+        $self->_ensure_host($ns) or return;
         # XXX Need to create a "superordinate host entry"
-        $self->{epp}->create_host({
-            'name' => $ns,
-            addrs => [{ version => "v4", addr => $self->_ip_f($ns) }]
-        }) or return;
     } 
     
     # What's left in $current needs to be deleted, and what's left in

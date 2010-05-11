@@ -55,6 +55,7 @@ sub register {
     # XXX Massage contact stuff
     $self->_setmaster;
     $self->{srs}->register_domain($args{domain}, $args{billing});
+    $self->set_nameservers(domain => $args{domain}, nameservers => $args{nameservers});
 }
 
 sub renew {
