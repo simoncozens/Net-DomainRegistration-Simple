@@ -82,28 +82,13 @@ sub revoke {
     my ($self, %args) = @_;
     # Check domain
     $self->_check_domain(\%args);
-    $self->_setmaster;
-    $self->{srs}->revoke_domain($args{domain});
+    # XXX
 }
 
 sub change_contact {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
-    $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
-    # Massage contact set into appropriate format
-    my $cs = $args{contacts};
-
-    my $rv = $self->{srs}->make_request({
-         action     => 'modify',
-         object     => 'domain',
-         attributes => {
-             affect_domains => 0,
-             data => "contact_info",
-             contact_set => $cs,
-
-         }
-     });
-     return $rv and $rv->{is_success};
+    # XXX
 }
 
 sub set_nameservers {
