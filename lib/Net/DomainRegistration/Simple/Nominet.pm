@@ -50,13 +50,44 @@ sub is_available {
     $self->{epp}->check_domain($domain);
 }
 
+sub _contact_id_for {
+    my ($self, $domain) = @_;
+    $domain =~ s/\.//; 
+    return "registrant-$domain";
+}
+
+sub _contact_set {
+    my ($self, %args) = @_;
+    my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
+    return unless $contact;
+    return (
+        postalInfo => {
+            int => {
+                name => $contact->{firstname}." ".$contact->{lastname},
+                org => $contact->{company},
+                addr => {
+                    street => [ $contact->{address} ],
+                    city => $contact->{city},
+                    sp => $contact->{state},
+                    pc => $contact->{postcode},
+                    cc => $contact->{country},
+                }
+            }
+        },
+        voice => $contact->{phone},
+        fax   => $contact->{fax},
+        email => $contact->{email}
+    )
+}
+
 sub register {
     my ($self, %args) = @_;
     $self->_check_register(\%args);
-    # XXX Create contact records
-    my $t;
-    my $a;
-    my $b;
+    return if !$self->is_available($args{domain});
+
+    my $id = $self->_contact_id_for($args{domain});
+    my %stuff = $self->_contact_set(%args) or return;
+    $self->{epp}->create_contact({ id => $id, %stuff }) or return;
 
     for my $ns (@{$args{nameservers}}) {
         $self->_ensure_host($ns) or return;
@@ -64,12 +95,10 @@ sub register {
 
     $self->{epp}->create_domain({
         name => $args{domain},
-        registrant => $args{registrant} || $self->{other_auth}{registrar_contact_id},
-        contacts => { tech => $t, admin => $a, billing => $b },
+        registrant => $id,
         status => "clientTransferProhibited", 
         ns => [ @{$args{nameservers}} ], 
-        hosts => [ @{$args{nameservers}} ] 
-    });
+    }) or return;
 }
 
 sub renew {
@@ -95,7 +124,15 @@ sub revoke {
 sub change_contact {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
-    # XXX
+    my %stuff = $self->_contact_set(%args) or return;
+
+    my $frame = Net::EPP::Frame::Command::Update::Contact->new();
+    my $name = $frame->createElement('contact:id');
+    $name->appendText($self->_contact_id_for($args{domain});
+    my $n = $frame->getNode('update')->getChildNodes->shift;
+    $n->insertBefore( $name, $n->firstChild );
+    
+    # Set up the chg element
 }
 
 sub _ensure_host {
@@ -143,7 +180,7 @@ sub set_nameservers {
         $a->appendText($_);
         $e->addChild($a);
     }
-    #$frame->add->addChild($e);
+    $frame->add->addChild($e);
     #$frame->add->parentNode->removeChild($frame->add);
     $frame->chg->parentNode->removeChild($frame->chg);
     #$frame->rem->parentNode->removeChild($frame->rem);
@@ -156,7 +193,7 @@ sub set_nameservers {
         $e->addChild($a);
         last;
     }
-    #$frame->rem->addChild($e);
+    $frame->rem->addChild($e);
     $self->{epp}->request($frame);
 }
 
@@ -248,5 +285,18 @@ sub new {
     return $self;
 }
 
+package Net::EPP::Frame::Command::Update::Contact;
+# Let's get monkeypatchy - steal stuff from ::Create::Contact because
+# that makes setting up the appropriate elements easy when we need to
+# add <contact:chg> stuff
+sub addEl {
+    my ($self, $name, $value) = @_;
+    
+    my $el = $self->createElement('contact:'.$name);
+    $el->appendText($value) if defined($value);
+    $self->chg->appendChild($el); # XXX Is this line correct?
+        
+    return $el;
+}            
 
 1;

@@ -40,6 +40,7 @@ our $VERSION = '0.01';
         address   => '555 Someplace Street',
         email     => 'john@example.com',
         phone     => '503-555-1212',
+        postcode  => '20166-6503',
         company   => 'n/a'
     };
 
