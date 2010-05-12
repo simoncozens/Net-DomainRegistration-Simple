@@ -124,7 +124,15 @@ sub revoke {
 sub change_contact {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
-    # XXX
+    my %stuff = $self->_contact_set(%args) or return;
+
+    my $frame = Net::EPP::Frame::Command::Update::Contact->new();
+    my $name = $frame->createElement('contact:id');
+    $name->appendText($self->_contact_id_for($args{domain});
+    my $n = $frame->getNode('update')->getChildNodes->shift;
+    $n->insertBefore( $name, $n->firstChild );
+    
+    # Set up the chg element
 }
 
 sub _ensure_host {
@@ -272,5 +280,18 @@ sub new {
     return $self;
 }
 
+package Net::EPP::Frame::Command::Update::Contact;
+# Let's get monkeypatchy - steal stuff from ::Create::Contact because
+# that makes setting up the appropriate elements easy when we need to
+# add <contact:chg> stuff
+sub addEl {
+    my ($self, $name, $value) = @_;
+    
+    my $el = $self->createElement('contact:'.$name);
+    $el->appendText($value) if defined($value);
+    $self->chg->appendChild($el); # XXX Is this line correct?
+        
+    return $el;
+}            
 
 1;
