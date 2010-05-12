@@ -41,7 +41,8 @@ sub _specialize {
     $self->{epp} = Net::EPP::Simple::Nominet->new(
         host => $self->_epp_host,
         user => $self->{username},
-        pass => $self->{password}
+        pass => $self->{password},
+        debug => 1,
     );
 }
 
@@ -128,7 +129,7 @@ sub change_contact {
 
     my $frame = Net::EPP::Frame::Command::Update::Contact->new();
     my $name = $frame->createElement('contact:id');
-    $name->appendText($self->_contact_id_for($args{domain});
+    $name->appendText($self->_contact_id_for($args{domain}));
     my $n = $frame->getNode('update')->getChildNodes->shift;
     $n->insertBefore( $name, $n->firstChild );
     
@@ -164,14 +165,7 @@ sub set_nameservers {
     # $toadd needs to be added
  
     my $frame = Net::EPP::Frame::Command::Update::Domain->new();
-
-    # setDomain doesn't work 
-    # (see http://code.google.com/p/perl-net-epp/issues/detail?id=1)
-    # so do it manually
-    my $name = $frame->createElement('domain:name');
-    $name->appendText($args{domain});
-    my $n = $frame->getNode('update')->getChildNodes->shift;
-    $n->insertBefore( $name, $n->firstChild );
+    my $name = $frame->setDomain($args{domain});
 
     my $e = $frame->createElement("domain:ns");
     for (keys %toadd) {
