@@ -204,28 +204,33 @@ sub new {
             $login->options->appendChild($option);
             $option;
         };
-    $v->appendText("1.0");
 
     my $l = $login->can("lang") ? $login->lang : do {
         $option = $login->createElement("lang");
         $login->options->appendChild($option);
         $option;
     };
-    $l->appendText("en");
+    $v->appendText($self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'version')->shift->firstChild->data);
+    $l->appendText($self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'lang')->shift->firstChild->data);
 
     my $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'objURI');
     while (my $object = $objects->shift) {
-        next unless $object->firstChild->data =~ /^urn:.*1\.0$/;
+        next unless $object->firstChild->data =~ /^urn:ietf/;
         my $el = $login->createElement('objURI');
         $el->appendText($object->firstChild->data);
         $login->svcs->appendChild($el);
     }
-    #$objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'extURI');
-    #while (my $object = $objects->shift) {
-    #    my $el = $login->createElement('objURI');
-    #    $el->appendText($object->firstChild->data);
-    #    $login->svcs->appendChild($el);
-    #}
+    $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'extURI');
+    my $svcext;
+    if ($objects->size) {
+        $svcext = $login->createElement('svcExtension');
+        #$login->svcs->appendChild($svcext);
+    }
+    while (my $object = $objects->shift) {
+        my $el = $login->createElement('extURI');
+        $el->appendText($object->firstChild->data);
+        $svcext->appendChild($el);
+    }
 
     $self->debug(sprintf('Attempting to login as client ID %s', $self->{user}));
     my $response = $self->request($login);
