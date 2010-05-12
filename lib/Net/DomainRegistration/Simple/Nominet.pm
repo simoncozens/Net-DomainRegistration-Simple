@@ -143,7 +143,7 @@ sub set_nameservers {
         $a->appendText($_);
         $e->addChild($a);
     }
-    #$frame->add->addChild($e);
+    $frame->add->addChild($e);
     #$frame->add->parentNode->removeChild($frame->add);
     $frame->chg->parentNode->removeChild($frame->chg);
     #$frame->rem->parentNode->removeChild($frame->rem);
@@ -156,7 +156,7 @@ sub set_nameservers {
         $e->addChild($a);
         last;
     }
-    #$frame->rem->addChild($e);
+    $frame->rem->addChild($e);
     $self->{epp}->request($frame);
 }
 
