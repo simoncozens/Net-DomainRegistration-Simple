@@ -51,12 +51,6 @@ sub is_available {
     $self->{epp}->check_domain($domain);
 }
 
-sub _contact_id_for {
-    my ($self, $domain) = @_;
-    $domain =~ s/\.//; 
-    return "registrant-$domain";
-}
-
 sub _contact_set {
     my ($self, %args) = @_;
     my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
@@ -86,9 +80,9 @@ sub register {
     $self->_check_register(\%args);
     return if !$self->is_available($args{domain});
 
-    my $id = $self->_contact_id_for($args{domain});
+    my $id = sprintf("%x", time); # XXX will break on May 10th 584554533311AD
     my %stuff = $self->_contact_set(%args) or return;
-    $self->{epp}->create_contact({ id => $id, %stuff }) or return;
+    $self->{epp}->create_contact({ id => $id, %stuff, authInfo => "1234" }) or return;
 
     for my $ns (@{$args{nameservers}}) {
         $self->_ensure_host($ns) or return;
@@ -98,7 +92,9 @@ sub register {
         name => $args{domain},
         registrant => $id,
         status => "clientTransferProhibited", 
-        ns => [ @{$args{nameservers}} ], 
+        period => 2, # No choice about this for Nominet
+        $args{nameservers} ? (ns => [ @{$args{nameservers}} ]) : (), 
+        authInfo => "1234"
     }) or return;
 }
 
@@ -122,17 +118,21 @@ sub revoke {
     # XXX
 }
 
+sub _get_registrant {
+    my ($self, $domain) = @_;
+    my $info = $self->{epp}->domain_info($domain);
+    return $info->{registrant} if $info;
+}
+
 sub change_contact {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
     my %stuff = $self->_contact_set(%args) or return;
 
     my $frame = Net::EPP::Frame::Command::Update::Contact->new();
-    my $name = $frame->createElement('contact:id');
-    $name->appendText($self->_contact_id_for($args{domain}));
-    my $n = $frame->getNode('update')->getChildNodes->shift;
-    $n->insertBefore( $name, $n->firstChild );
-    
+    my $id = $self->_get_registrant($args{domain}) or return;
+    $frame->setContact($id);
+
     # Set up the chg element
 }
 
