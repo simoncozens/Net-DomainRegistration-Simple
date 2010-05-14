@@ -128,12 +128,31 @@ sub change_contact {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
     my %stuff = $self->_contact_set(%args) or return;
+    my $contact = \%stuff;
 
     my $frame = Net::EPP::Frame::Command::Update::Contact->new();
     my $id = $self->_get_registrant($args{domain}) or return;
     $frame->setContact($id);
+    if (ref($contact->{postalInfo}) eq 'HASH') {
+        foreach my $type (keys(%{$contact->{postalInfo}})) {
+            $frame->Net::EPP::Frame::Command::Create::Contact::addPostalInfo(
+                $type,
+                $contact->{postalInfo}->{$type}->{name},
+                $contact->{postalInfo}->{$type}->{org},
+                $contact->{postalInfo}->{$type}->{addr}
+            );
+        }
+    }
 
-    # Set up the chg element
+    $frame->Net::EPP::Frame::Command::Create::Contact::setVoice($contact->{voice}) if ($contact->{voice} ne '');
+    $frame->Net::EPP::Frame::Command::Create::Contact::setFax($contact->{fax}) if ($contact->{fax} ne '');
+    $frame->Net::EPP::Frame::Command::Create::Contact::setEmail($contact->{email});
+    $frame->Net::EPP::Frame::Command::Create::Contact::setAuthInfo('1234');
+
+    $frame->rem->parentNode->removeChild($frame->rem);
+    $frame->add->parentNode->removeChild($frame->add);
+    
+    $self->{epp}->request($frame);
 }
 
 sub _ensure_host {
