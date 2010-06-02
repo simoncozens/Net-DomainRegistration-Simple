@@ -105,7 +105,7 @@ sub renew {
     $self->_check_renew(\%args);
 
     my $info = $self->{epp}->domain_info($args{domain}) or return;
-    my $d = $info->{exDate];
+    my $d = $info->{exDate};
     $d =~ s/T.*//; # Avoid "garbage at end of string";
     my $t = Time::Piece->strptime($d, "%Y-%m-%d");
     return if $t - 180*ONE_DAY > Time::Piece->new;
