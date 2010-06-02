@@ -119,7 +119,7 @@ sub renew {
     my $answer = $self->{epp}->request($frame);
     my $code = $self->{epp}->_get_response_code($answer);
     return if $code > 1999;
-    my $node = $answer->getNode("domain", "exDate");
+    my $node = $answer->getNode("domain:exDate");
     return unless $node;
     $d = $node->textContent;
     $d =~ s/T.*//;
