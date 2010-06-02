@@ -117,7 +117,7 @@ sub renew {
     $frame->setPeriod(2);
     # Grab the new exDate
     my $answer = $self->{epp}->request($frame);
-    my $code = $self->get_response_code($answer);
+    my $code = $self->{epp}->get_response_code($answer);
     return if $code > 1999;
     my $node = $answer->getNode("domain", "exDate");
     return unless $node;
