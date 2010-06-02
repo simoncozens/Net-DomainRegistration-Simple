@@ -115,7 +115,15 @@ sub renew {
     $frame->setDomain($args{domain});
     $frame->setCurExpDate($d);
     $frame->setPeriod(2);
-    $self->{epp}->request($frame);
+    # Grab the new exDate
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->get_response_code($answer);
+    return if $code > 1999;
+    my $node = $answer->getNode("domain", "exDate");
+    return unless $node;
+    $d = $node->textContent;
+    $d =~ s/T.*//;
+    return $d;
 }
 
 sub revoke {
