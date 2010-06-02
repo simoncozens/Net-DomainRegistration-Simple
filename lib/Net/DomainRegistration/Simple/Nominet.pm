@@ -4,6 +4,8 @@ use strict;
 use warnings;
 use base "Net::DomainRegistration::Simple";
 use Net::EPP::Simple;
+use Time::Piece;
+use Time::Seconds;
 
 =head1 NAME
 
@@ -101,14 +103,19 @@ sub register {
 sub renew {
     my ($self, %args) = @_;
     $self->_check_renew(\%args);
-    # Find current expiry date
-    # Check it's within 6months
+
+    my $info = $self->{epp}->domain_info($args{domain}) or return;
+    my $d = $info->{exDate];
+    $d =~ s/T.*//; # Avoid "garbage at end of string";
+    my $t = Time::Piece->strptime($d, "%Y-%m-%d");
+    return if $t - 180*ONE_DAY > Time::Piece->new;
+    #XXX
     
-    #my $response = $self->request($frame);
-    #$Code = $self->_get_response_code($response);
-    #$Message = $self->_get_message($response);
-
-
+    my $frame = Net::EPP::Frame::Command::Renew::Domain->new;
+    $frame->setDomain($args{domain});
+    $frame->setCurExpDate($d);
+    $frame->setPeriod(2);
+    $self->{epp}->request($frame);
 }
 
 sub revoke {
@@ -208,6 +215,13 @@ sub set_nameservers {
     }
     $frame->rem->addChild($e);
     $self->{epp}->request($frame);
+}
+
+sub poll {
+    my ($self) = @_;
+    my $frame = Net::EPP::Frame::Command::Poll::Req->new();
+    my $resp = $self->{epp}->request($frame);
+    # XXX Do stuff
 }
 
 # All this gubbins just to add a couple of "options" to the login frame

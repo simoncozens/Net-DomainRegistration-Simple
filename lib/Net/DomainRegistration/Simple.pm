@@ -73,6 +73,15 @@ sub new {
 
 =head2 renew
 
+    my $new_expiry = $r->renew(
+        domain => "example.com",
+        years  => 2
+    );
+
+Attempts to renew the supplied domain. Will return the new expiry date
+in YYYY-MM-DD format if the renewal is successful. Otherwise returns
+false.
+
 =head2 revoke
 
 =head2 change_contact
