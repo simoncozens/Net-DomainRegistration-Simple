@@ -33,9 +33,12 @@ should be your management domain.
 sub _specialize { 
     my $self = shift;
     my $srs = $self->{srs} = Net::OpenSRS->new();
+    $srs->debug_level(2);
     if ($self->{environment}) { $srs->environment($self->{environment}) }
-    $srs->set_manage_auth($self->{username}, $self->{password});
     $srs->set_key($self->{other_auth}{api_key});
+    # The following line shouldn't be necessary but seems to be
+    $srs->{config}->{manage_username} = $self->{username};
+    $srs->set_manage_auth($self->{username}, $self->{password});
     $self->_setmaster;
     if (!$self->{cookie}) {
         croak "Couldn't get OpenSRS cookie: ".$srs->last_response();
@@ -44,6 +47,7 @@ sub _specialize {
 
 sub _setmaster {
     my $self = shift;
+    $self->{srs}->master_domain($self->{other_auth}{master_domain});
     $self->{cookie} = $self->{srs}->get_cookie(
                                 $self->{other_auth}{master_domain}
                       );
