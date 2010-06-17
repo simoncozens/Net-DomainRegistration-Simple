@@ -105,11 +105,11 @@ sub change_contact {
 
 sub set_nameservers {
     my ($self, %args) = @_;
-    $self->_check_set_nameservers(\%args); 
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
     # See what we have already
     my $rv = $self->{srs}->make_request({
          action     => 'get',
+         cookie     => $self->{cookie},
          object     => 'nameserver',
          attributes => { name => "all" }
      });
@@ -118,10 +118,12 @@ sub set_nameservers {
     for my $ns (@{$args{nameservers}}) {
         next if $servers{$ns};
         # else create
+        my $ip = $self->_ipof($ns) or warn "$ns has no IP", return 0; 
         my $rv = $self->{srs}->make_request({
              action     => 'create',
              object     => 'nameserver',
-             attributes => { name => $ns, $self->_ipof($ns) }
+             cookie     =>  $self->{cookie},
+             attributes => { name => $ns, ipaddress => $self->_ipof($ns) }
         });  
         return unless $rv->{is_success};
     } 
