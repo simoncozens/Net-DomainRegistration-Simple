@@ -133,7 +133,8 @@ sub _check_set_nameservers {
 
 sub _ipof {
     my ($self, $name) = @_;
-    inet_ntoa(scalar gethostbyname($name));
+    my $host = scalar gethostbyname($name) or return;
+    inet_ntoa($host);
 }
 
 =head1 AUTHOR
