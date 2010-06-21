@@ -83,21 +83,41 @@ sub revoke {
     $self->{srs}->revoke_domain($args{domain});
 }
 
+sub _contact_set {
+    my ($self, %args) = @_;
+    my $cs;
+    for (qw/owner tech admin billing/){ 
+        my $c = $args{$_ eq "tech"? "technical" : $_} || next;
+        $cs->{$_} = {
+            first_name  => $c->{firstname},
+            last_name   => $c->{lastname},
+            org_name    => $c->{company} || "n/a",
+            address1    => $c->{address},
+            city        => $c->{city},
+            state       => $c->{state},
+            postal_code => $c->{postcode},
+            country     => $c->{country},
+            phone       => $c->{phone},
+            fax         => $c->{fax},
+            email       => $c->{email}
+        }
+    }
+    return $cs;
+}
+
 sub change_contact {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
     $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
-    # Massage contact set into appropriate format
-    my $cs = $args{contacts};
-
+    my $cs = $self->_contact_set(%args);
     my $rv = $self->{srs}->make_request({
          action     => 'modify',
+         cookie     => $self->{cookie},
          object     => 'domain',
          attributes => {
              affect_domains => 0,
              data => "contact_info",
              contact_set => $cs,
-
          }
      });
      return $rv and $rv->{is_success};
