@@ -131,6 +131,20 @@ sub _check_set_nameservers {
     }
 }
 
+sub _check_transfer {
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
+    croak "You must supply the Nominet TAG for the new registrar"
+        unless $args->{tag};
+}
+
+sub _check_handshake {
+    my ($self, $args) = @_;
+    for ( qw/caseid handshake/ ) {
+        croak "You must supply the $_ parameter" unless $args->{$_};
+    }
+}
+
 sub _ipof {
     my ($self, $name) = @_;
     my $host = scalar gethostbyname($name) or return;
