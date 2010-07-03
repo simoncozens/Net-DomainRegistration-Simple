@@ -71,9 +71,7 @@ sub domain_info {
 
     croak "Nominet error $code" if $code > 1999;
 
-    my $infData = $answer->getNode((Net::EPP::Frame::ObjectSpec->spec('domain'))[1], 'domain:infData');
-
-    return $self->{epp}->_domain_infData_to_hash($infData);
+    return $self->_domain_infData_to_hash($answer);
 }
 
 sub _contact_set {
@@ -529,8 +527,8 @@ sub _host_cancelled_notice {
 
     $rv{notice} = 'hostCancelled';
     my $hosts = $res->getElementsByLocalName('n:hostObj');
-    while (my $host = $hosts->shift;) {
-        push @{%rv{hosts}}, $host->textContent;
+    while (my $host = $hosts->shift) {
+        push @{$rv{hosts}}, $host->textContent;
     }
 
     my $domains = $res->getElementsByLocalName('domain:name');
@@ -560,7 +558,7 @@ sub _poor_quality_notice {
     }
 
     if ( $res->getNode('account:infData') ) {
-        # XXX Get details of account
+        $rv{account} = $self->_account_infData_to_hash($res);
     }
 
     my $domains = $res->getElementsByLocalName('domain:name');
@@ -611,6 +609,124 @@ sub _referal_accepted_notice {
     }
 
     return %rv;
+}
+
+sub _referal_rejected_notice {
+    my ($self, $res ) = @_;
+    my %rv = ();
+
+    $rv{notice} = 'referralReject';
+    $rv{domain} = $res->getNode('domain:name')->textContent;
+    $rv{reason} = $res->getNode('domain:reason')->textContent;
+
+    return %rv;
+}
+
+sub _registrant_change_notice {
+    my ($self, $res ) = @_;
+    my %rv = ();
+
+    $rv{notice} = 'registrantChange';
+    $rv{old_account} = $res->getNode('n:old-account-id')->textContent;
+    $rv{new_account} = $res->getNode('n:account-id')->textContent;
+
+    $rv{account} = $self->_account_infData_to_hash($res);
+
+    my $domains = $res->getElementsByTagName('domain:simpleInfData');
+    while (my $domain = $domains->shift) {
+        push @{$rv{domains}}, $self->_domain_infData_to_hash($domain);
+    }
+
+    return %rv;
+}
+
+sub _registrar_change_notice {
+    my ($self, $res ) = @_;
+    my %rv = ();
+
+    $rv{notice} = 'registrarChange';
+    $rv{newtag} = $res->getNode('n:registrar-tag')->textContent;
+
+    $rv{account} = $self->_account_infData_to_hash($res);
+
+    my $domains = $res->getElementsByTagName('domain:simpleInfData');
+    while (my $domain = $domains->shift) {
+        push @{$rv{domains}}, $self->_domain_infData_to_hash($domain);
+    }
+    return %rv;
+}
+
+sub _domain_infData_to_hash {
+    my ($self, $infData) = @_;
+
+    my $hash = { };
+    $hash = $self->_account_infData_to_hash($infData);
+
+    foreach my $name (qw/name clID crID crDate upID upDate exDate/) {
+        next unless $infData->getNode('domain:'.$name);
+        $hash->{$name} = $infData->getNode('domain:'.$name)->textContent;
+    }
+    $hash->{status} = $infData->getNode('domain:reg-status')->textContent;
+
+    my @ns = $infData->getElementsByTagName('domain:host');
+    foreach my $host ( @ns ) {
+        my $name = $host->getChildrenByTagName('domain:hostName');
+        my $addr = $host->getChildrenByTagName('domain:hostAddr');
+
+        if ( $addr ) {
+            push @{$hash->{ns}}, { 
+                name => $name->shift->textContent,
+                addr => $addr->shift->textContent,
+                version => addr->getAttribute('ip')
+            };
+        }
+        else {
+            push @{$hash->{ns}}, { name => $name->shift->textContent };
+        }
+    }
+
+    return $hash;
+}
+
+sub _account_infData_to_hash {
+    my ($self, $infData) = @_;
+    my $hash = { };
+
+    foreach my $name (qw/roid name trad-name type opt-out clID 
+                         crID crDate upID upDate/) {
+        my $node = $infData->getNode('account:'.$name);
+        next unless $node;
+        $hash->{account}->{$name} = $node->textContent;
+    }
+
+    my $address = $infData->getNode('account:addr');
+    my @addr = $address->getChildrenByTagName('*');
+    foreach ( @addr ) {
+        my $name = $_->nodeName;
+        $name =~ s/account:(.*)/$1/;
+        $hash->{account}->{addr}->{$name} = $_->textContent;
+    }
+
+    my $contacts = $infData->getElementsByTagName('account:contact');
+    while ( my $c = $contacts->shift ) {
+        my $type = $c->getAttribute('type');
+        my @inf = $c->getChildrenByTagName('contact:infData');
+        my @contact = $inf[0]->getChildrenByTagName('*');
+        my $ch = {};
+        foreach (@contact) {
+            my $name = $_->nodeName;
+            $name =~ s/contact:(.*)/$1/;
+            $ch->{$name} = $_->textContent;
+        }
+        if ( $type ) {
+            push @{$hash->{account}->{contact}->{$type}}, $ch;
+        }
+        else {
+            push @{$hash->{account}->{contact}}, $ch;
+        }
+    }
+
+    return $hash;
 }
 
 # All this gubbins just to add a couple of "options" to the login frame
@@ -721,6 +837,7 @@ sub new {
 
     return $self;
 }
+
 
 package Net::EPP::Frame::Command::Update::Contact;
 # Let's get monkeypatchy - steal stuff from ::Create::Contact because
