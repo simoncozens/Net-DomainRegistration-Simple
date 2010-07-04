@@ -662,6 +662,8 @@ sub _domain_infData_to_hash {
     my $hash = { };
     $hash = $self->_account_infData_to_hash($infData);
 
+    $hash->{registrant} = $hash->{account}->{name} if $hash->{account}->{name};
+
     foreach my $name (qw/name clID crID crDate upID upDate exDate/) {
         next unless $infData->getNode('domain:'.$name);
         $hash->{$name} = $infData->getNode('domain:'.$name)->textContent;
