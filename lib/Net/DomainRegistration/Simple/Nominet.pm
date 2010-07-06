@@ -335,6 +335,50 @@ sub list {
     return @domains;
 }
 
+=head2 taglist
+
+=cut
+
+sub taglist {
+    my ($self) = @_;
+
+    my $frame = Net::EPP::Frame::Command->new();
+
+    my $c = $frame->getNode('command');
+
+    my $n = $frame->getNode('net');
+    $c->removeChild($n);
+    my $id = $frame->getNode('clTRID');
+    $c->removeChild($id);
+
+    my $info = $frame->createElement('info');
+    my $tl = $frame->createElement('tag:list');
+    $tl->setAttribute('xmlns:tag', 'http://www.nominet.org.uk/epp/xml/nom-tag-1.0'); 
+    $tl->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-tag-1.0 nom-tag-1.0.xsd');
+
+    $info->addChild($tl);
+    $c->addChild($info);
+
+    $id = $frame->createElement('clTRID');
+    $c->addChild($id);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef if $code > 1999; # XXX Should be a croak?
+
+    my @rv = ();
+    my $tags = $answer->getElementsByTagName('tag:infData');
+    while (my $tag = $tags->shift) {
+        my $t = { };
+        my @c = $tag->getChildrenByTagName('*');
+        foreach (@c) { 
+            $t->{$_->nodeName} = $_->textContent;
+        }
+        push @rv, $t;
+    }
+    return @rv;
+}
+
 sub poll {
     my ($self) = @_;
     my $frame = Net::EPP::Frame::Command::Poll::Req->new();
@@ -569,7 +613,12 @@ sub _domains_released_notice {
     my ($self, $res) = @_;
     my %rv = ();
 
-    $rv{notice} = 'released';
+    if ( $self->_get_message($res) =~ /Released/ ) {
+        $rv{notice} = 'released';
+    }
+    else {
+        $rv{notice} = 'rejected';
+    }
     $rv{newtag} = $res->getNode('n:registrar-tag')->textContent;
     $rv{oldtag} = $res->getNode('n:from')->textContent;
     
@@ -895,6 +944,7 @@ sub new {
     for ('nom-domain', 
          'nom-notifications',
          'nom-abuse-feed',
+         'nom-tag'
          ) {
         next unless $schemas{$_};
         my $el = $login->createElement('objURI');
