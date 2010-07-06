@@ -108,6 +108,12 @@ sub _check_domain {
     # XXX More check
 }
 
+sub _check_list {
+    my ($self, $args) = @_;
+    croak "Need to specify expiry or month argument" unless
+        $args->{'month'} || $args->{'expiry'};
+}
+
 sub _check_register {
     my ($self, $args) = @_;
     $self->_check_domain($args);

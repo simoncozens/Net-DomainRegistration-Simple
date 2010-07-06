@@ -254,7 +254,7 @@ sub set_nameservers {
 
 sub list {
     my ($self, %args) = @_;
-    # $self->_check_list(%args);
+    $self->_check_list(\%args);
 
     # We need to create the frame from scratch so we'll use the base
     # command frame, clean out the existing elements and build it 
