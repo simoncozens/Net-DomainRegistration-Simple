@@ -250,6 +250,30 @@ sub set_nameservers {
 
 =head2 list
 
+    $nominet->list( 'month' => '2010-01' fields => 'all' );
+
+Returns a list of domains, either registered in a given month if called
+with the "month" parameter or expiring in a given month if called with the
+"expiry" parameter. If called with the fields parameter set to "all" then
+full information for each domain is returned, otherwise just the domain
+name.
+
+Parameters:
+
+    month : either this or expiry must be given
+    expiry : either this or month must be given
+    fields : (optional) may be set to "none" or "all" or omitted entirely
+
+Returns:
+
+If fields parameter is omitted or set to "none" returns an array each 
+element of which is a domain name either registered in or expiring in
+the given month.
+
+If the fields parameter is set to "all" returns an array each element of
+which is a hash reference containing full information (as per domain_info
+method) for each domain registered in or expiring in the given month.
+
 =cut
 
 sub list {
