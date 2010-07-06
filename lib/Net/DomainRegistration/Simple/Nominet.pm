@@ -944,7 +944,6 @@ sub new {
     for ('nom-domain', 
          'nom-notifications',
          'nom-abuse-feed',
-         'nom-tag'
          ) {
         next unless $schemas{$_};
         my $el = $login->createElement('objURI');
