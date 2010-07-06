@@ -71,7 +71,9 @@ sub domain_info {
 
     croak "Nominet error $code" if $code > 1999;
 
-    return $self->_domain_infData_to_hash($answer);
+    my $infData = $answer->getNode('domain:infData');
+
+    return $self->_domain_infData_to_hash($infData);
 }
 
 sub _contact_set {
@@ -244,6 +246,69 @@ sub set_nameservers {
     }
     $frame->rem->addChild($e);
     $self->{epp}->request($frame);
+}
+
+=head2 list
+
+=cut
+
+sub list {
+    my ($self, %args) = @_;
+    # $self->_check_list(%args);
+
+    # We need to create the frame from scratch so we'll use the base
+    # command frame, clean out the existing elements and build it 
+    # ourselves.
+
+    my $frame = Net::EPP::Frame::Command->new();
+
+    my $c = $frame->getNode('command');
+
+    my $n = $frame->getNode('net');
+    $c->removeChild($n);
+    my $id = $frame->getNode('clTRID');
+    $c->removeChild($id);
+
+    my $info = $frame->createElement('info');
+
+    my $dl = $frame->createElement('domain:list');
+    $dl->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
+    $dl->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
+
+    for (qw/month expiry fields/) {
+        next unless $args{$_};
+        my $f = $frame->createElement('domain:'.$_);
+        $f->appendText($args{$_});
+        $dl->addChild($f);
+    }
+
+    $info->addChild($dl);
+    $c->addChild($info);
+
+    $id = $frame->createElement('clTRID');
+    $c->addChild($id);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef if $code > 1999; # XXX Should be a croak?
+
+    my @domains = ();
+
+    my $list = $answer->getNode('domain:listData');
+
+    my $domains = $list->getElementsByTagName('domain:infData');
+    if ( $domains ) {
+        while ( my $domain = $domains->shift ) {
+            push @domains, $self->_domain_infData_to_hash($domain);
+        }
+    }
+    else {
+        my @d = $list->getElementsByTagName('domain:name');
+        for (@d) {
+            push @domains, $_->textContent;
+        }
+    }
+    return @domains;
 }
 
 sub poll {
@@ -557,8 +622,8 @@ sub _poor_quality_notice {
         $rv{deleteDate} = $res->getNode('n:cancelDate')->textContent;
     }
 
-    if ( $res->getNode('account:infData') ) {
-        $rv{account} = $self->_account_infData_to_hash($res);
+    if ( my $infData = $res->getNode('account:infData') ) {
+        $rv{account} = $self->_account_infData_to_hash($infData);
     }
 
     my $domains = $res->getElementsByLocalName('domain:name');
@@ -630,7 +695,8 @@ sub _registrant_change_notice {
     $rv{old_account} = $res->getNode('n:old-account-id')->textContent;
     $rv{new_account} = $res->getNode('n:account-id')->textContent;
 
-    $rv{account} = $self->_account_infData_to_hash($res);
+    my $infData = $res->getNode('account:infData');
+    $rv{account} = $self->_account_infData_to_hash($infData);
 
     my $domains = $res->getElementsByTagName('domain:simpleInfData');
     while (my $domain = $domains->shift) {
@@ -647,7 +713,8 @@ sub _registrar_change_notice {
     $rv{notice} = 'registrarChange';
     $rv{newtag} = $res->getNode('n:registrar-tag')->textContent;
 
-    $rv{account} = $self->_account_infData_to_hash($res);
+    my $infData = $res->getNode('account:infData');
+    $rv{account} = $self->_account_infData_to_hash($infData);
 
     my $domains = $res->getElementsByTagName('domain:simpleInfData');
     while (my $domain = $domains->shift) {
@@ -665,10 +732,9 @@ sub _domain_infData_to_hash {
     $hash->{registrant} = $hash->{account}->{name} if $hash->{account}->{name};
 
     foreach my $name (qw/name clID crID crDate upID upDate exDate/) {
-        next unless $infData->getNode('domain:'.$name);
-        $hash->{$name} = $infData->getNode('domain:'.$name)->textContent;
+        next unless $hash->{$name} = $infData->getElementsByTagName('domain:'.$name)->shift->textContent;
     }
-    $hash->{status} = $infData->getNode('domain:reg-status')->textContent;
+    $hash->{status} = $infData->getChildrenByTagName('domain:reg-status')->shift->textContent;
 
     my @ns = $infData->getElementsByTagName('domain:host');
     foreach my $host ( @ns ) {
@@ -696,13 +762,13 @@ sub _account_infData_to_hash {
 
     foreach my $name (qw/roid name trad-name type opt-out clID 
                          crID crDate upID upDate/) {
-        my $node = $infData->getNode('account:'.$name);
+        my $node = $infData->getElementsByTagName('account:'.$name);
         next unless $node;
-        $hash->{account}->{$name} = $node->textContent;
+        next unless $hash->{account}->{$name} = $node->shift->textContent;
     }
 
-    my $address = $infData->getNode('account:addr');
-    my @addr = $address->getChildrenByTagName('*');
+    my $address = $infData->getElementsByTagName('account:addr');
+    my @addr = $address->shift->getChildrenByTagName('*');
     foreach ( @addr ) {
         my $name = $_->nodeName;
         $name =~ s/account:(.*)/$1/;
