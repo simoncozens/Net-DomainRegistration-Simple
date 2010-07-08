@@ -338,6 +338,17 @@ sub list {
 
 =head2 taglist
 
+    $nominet->taglist();
+
+Returns an array of all currently active tags. Each array element is a 
+hash reference as follows:
+
+    registrar-tag : TAG
+    name : Name of tag holder
+    trad-name : (optional) Trading name
+    handshake : Y if tag holder requires a handshake to move domains to
+                the tag or N if they do not
+
 =cut
 
 sub taglist {
