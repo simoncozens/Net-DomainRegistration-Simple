@@ -39,14 +39,23 @@ sub _epp_host {
 }
 
 sub _specialize { 
-    my ($self, $special) = @_;
+    my ($self, $schema) = @_;
     $self->{epp} = Net::EPP::Simple::Nominet->new(
         host => $self->_epp_host, 
         user => $self->{username},
         pass => $self->{password},
         debug => 1,
-        specialFunction => $special,
+        specialSchema => $schema,
     );
+}
+
+sub _reset_connection {
+    my ($self, $schema) = @_;
+
+    return undef unless $self->{epp}->logout;
+    return undef unless $self->_specialize( $schema );
+
+    return 1;
 }
 
 sub is_available {
@@ -354,8 +363,7 @@ hash reference as follows:
 sub taglist {
     my ($self) = @_;
 
-    return undef unless $self->{epp}->logout;
-    return undef unless $self->_specialize( 'nom-tag' );
+    return undef unless $self->_reset_connection( 'nom-tag' );
 
     my $frame = Net::EPP::Frame::Command->new();
 
@@ -392,8 +400,7 @@ sub taglist {
         push @rv, $t;
     }
 
-    return undef unless $self->{epp}->logout;
-    $self->_specialize;
+    return undef unless $self->_reset_connection;
 
     return @rv;
 }
@@ -540,6 +547,64 @@ sub handshake {
     }
 
     return @rv;
+}
+
+=head2 create_reseller
+
+    $nominet->create_reseller( reference => 'RESELLER1', 
+                               tradingName => 'Reseller 1 Ltd', 
+                               url => 'http://www.example.com/' );
+
+Creates a new reseller. Returns 1 on success or undef on failure.
+
+Parameters:
+
+    reference : your unique reference for the new reseller
+    tradingName : trading name of the reseller
+    url : URL for the reseller that customers will be directed to for 
+          support or further information
+    email : email contact for the reseller
+    voice : telephone number contact for the reseller
+
+reference, tradingName and url are required. Either email or voice must 
+also be supplied
+
+Note that reference may only contain upper case characters A-Z, digits 0-9
+and hyphens.
+
+See http://www.nominet.org.uk/registrars/resellerdata/supplyresellerdata/
+
+=cut
+
+sub create_reseller {
+    my ($self, %args) = @_;
+    $self->_check_create_reseller(\%args);
+
+    $self->_reset_connection('nom-reseller');
+
+    my $frame = Net::EPP::Frame::Command::Create->new();
+    my $c = $frame->getNode('create');
+
+    my $rc = $frame->createElement('reseller:create');
+
+    $rc->setAttribute('xmlns:reseller', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0');
+    $rc->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0 nom-reseller-1.0.xsd');
+
+    for my $name (qw/reference tradingName url email voice/) {
+        next unless $args{$name};
+        my $e = $frame->createElement('reseller:'.$name);
+        $e->appendText($args{$name});
+        $rc->addChild($e);
+    }
+
+    $c->addChild($rc);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    $self->_reset_connection();
+
+    return undef unless $code = 1000;
+    return 1;
 }
 
 # The following methods are called by the poll method to handle each type
@@ -990,7 +1055,7 @@ sub login {
         $login->svcs->appendChild($el);
     }
 
-    if ( $params{specialFunction} ) {
+    if ( $params{specialSchema} ) {
         # XXX Remove al existing objURI elements and pass only nom-tag
         my $objs = $login->getElementsByTagName('objURI');
         while ( my $obj = $objs->shift) {
@@ -998,7 +1063,7 @@ sub login {
         }
 
         my $el = $login->createElement('objURI');
-        $el->appendText('http://www.nominet.org.uk/epp/xml/'.$params{specialFunction}.'-'.$schemas{$params{specialFunction}});
+        $el->appendText('http://www.nominet.org.uk/epp/xml/'.$params{specialSchema}.'-'.$schemas{$params{specialSchema}});
         $login->svcs->appendChild($el);
     }
 

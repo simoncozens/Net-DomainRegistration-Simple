@@ -151,6 +151,16 @@ sub _check_handshake {
     }
 }
 
+sub _check_create_reseller {
+    my ($self, $args) = @_;
+    for (qw/reference tradingName url/) {
+        croak "You must supply the $_ parameter" unless $args->{$_};
+    }
+    if ( ! $args->{email} && ! $args->{voice} ) {
+        croak "You must supply the email or voice parameter";
+    }
+}
+
 sub _ipof {
     my ($self, $name) = @_;
     my $host = scalar gethostbyname($name) or return;
