@@ -41,10 +41,10 @@ sub _epp_host {
 sub _specialize { 
     my $self = shift;
     $self->{epp} = Net::EPP::Simple::Nominet->new(
-        host => $self->_epp_host,
-        user => $self->{username},
-        pass => $self->{password},
-        debug => 1,
+        host => $self->_epp_host,   # XXX Why is this here? Why not just use $self->{} 
+        user => $self->{username},  # XXX $self->{username}, $self->{password}, etc
+        pass => $self->{password},  # XXX in the login method?
+        debug => $self->{debug},
     );
 }
 
@@ -870,6 +870,19 @@ sub _account_infData_to_hash {
     return $hash;
 }
 
+sub _reseller_infData_to_hash {
+    my ($self, $infData) = @_;
+    my $hash = { };
+
+    for my $name (qw/reference tradingName url email voice/) {
+        my $node = $infData->getElementsByTagName('reseller:'.$name);
+        next unless $node;
+        $hash->{$name} = $node->shift->textContent;
+    }
+
+    return $hash;
+}
+
 # All this gubbins just to add a couple of "options" to the login frame
 package Net::EPP::Simple::Nominet;
 use base "Net::EPP::Simple";
@@ -893,6 +906,13 @@ sub new {
     $self->{timeout}    = (int($params{timeout}) > 0 ? $params{timeout} : 15);
 
     bless($self, $package);
+
+    return undef unless $self->login(%params);
+    return $self;
+}
+
+sub login {
+    my ( $self, %params ) = @_;
 
     $self->debug(sprintf('Attempting to connect to %s:%d', $self->{host}, $self->{port}));
     $self->{greeting} = $self->connect;
@@ -927,13 +947,13 @@ sub new {
 
     my %schemas = ();
     while (my $object = $objects->shift) {
-        # XXX Don't ignore the Nominet schemas - we need them!
+        # Don't ignore the Nominet schemas - we need them!
         if ( $object->firstChild->data =~ /^http:\/\/www.nominet.org.uk\/epp\/xml\/(.*)-([\d\.]+)/ ) {
             next if $schemas{$1} > $2; # XXX we only want the latest one
             $schemas{$1} = $2;
             next;
         }
-        # XXX We only need the host schema from the non-Nominet ones
+        # We only need the host schema from the non-Nominet ones
         next unless $object->firstChild->data =~ /^urn:ietf:params:xml:ns:host/;
 
         my $el = $login->createElement('objURI');
@@ -944,10 +964,22 @@ sub new {
     for ('nom-domain', 
          'nom-notifications',
          'nom-abuse-feed',
-         ) {
+        ) {
         next unless $schemas{$_};
         my $el = $login->createElement('objURI');
         $el->appendText('http://www.nominet.org.uk/epp/xml/'.$_ . "-" . $schemas{$_});
+        $login->svcs->appendChild($el);
+    }
+
+    if ( $params{tagonly} ) {
+        # XXX Remove al existing objURI elements and pass only nom-tag
+        my $objs = $login->getElementsByTagName('objURI');
+        while ( my $obj = $objs->shift) {
+            $login->svcs->removeChild($obj);
+        }
+
+        my $el = $login->createElement('objURI');
+        $el->appendText('http://www.nominet.org.uk/epp/xml/nom-tag-1.0');
         $login->svcs->appendChild($el);
     }
 
@@ -976,7 +1008,7 @@ sub new {
         return undef;
     }
 
-    return $self;
+    return 1;
 }
 
 
