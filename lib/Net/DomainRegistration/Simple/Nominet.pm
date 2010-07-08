@@ -39,12 +39,13 @@ sub _epp_host {
 }
 
 sub _specialize { 
-    my $self = shift;
+    my ($self, $special) = @_;
     $self->{epp} = Net::EPP::Simple::Nominet->new(
-        host => $self->_epp_host,   # XXX Why is this here? Why not just use $self->{} 
-        user => $self->{username},  # XXX $self->{username}, $self->{password}, etc
-        pass => $self->{password},  # XXX in the login method?
-        debug => $self->{debug},
+        host => $self->_epp_host, 
+        user => $self->{username},
+        pass => $self->{password},
+        debug => 1,
+        specialFunction => $special,
     );
 }
 
@@ -342,6 +343,9 @@ sub list {
 sub taglist {
     my ($self) = @_;
 
+    return undef unless $self->{epp}->logout;
+    return undef unless $self->_specialize( 'nom-tag' );
+
     my $frame = Net::EPP::Frame::Command->new();
 
     my $c = $frame->getNode('command');
@@ -376,6 +380,10 @@ sub taglist {
         }
         push @rv, $t;
     }
+
+    return undef unless $self->{epp}->logout;
+    $self->_specialize;
+
     return @rv;
 }
 
@@ -971,7 +979,7 @@ sub login {
         $login->svcs->appendChild($el);
     }
 
-    if ( $params{tagonly} ) {
+    if ( $params{specialFunction} ) {
         # XXX Remove al existing objURI elements and pass only nom-tag
         my $objs = $login->getElementsByTagName('objURI');
         while ( my $obj = $objs->shift) {
@@ -979,7 +987,7 @@ sub login {
         }
 
         my $el = $login->createElement('objURI');
-        $el->appendText('http://www.nominet.org.uk/epp/xml/nom-tag-1.0');
+        $el->appendText('http://www.nominet.org.uk/epp/xml/'.$params{specialFunction}.'-'.$schemas{$params{specialFunction}});
         $login->svcs->appendChild($el);
     }
 
@@ -1010,7 +1018,6 @@ sub login {
 
     return 1;
 }
-
 
 package Net::EPP::Frame::Command::Update::Contact;
 # Let's get monkeypatchy - steal stuff from ::Create::Contact because
