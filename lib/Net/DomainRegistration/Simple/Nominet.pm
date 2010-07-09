@@ -58,9 +58,17 @@ sub _reset_connection {
     return 1;
 }
 
+=head2 is_available
+
+    $nominet->is_available('example.co.uk');
+
+Returns true is domain is available or false.
+
+=cut
+
 sub is_available {
     my ($self, $domain) = @_;
-    $self->{epp}->check_domain($domain);
+    $self->check($domain);
 }
 
 =head2 check
@@ -92,12 +100,17 @@ sub check {
 
     my $results = $answer->getElementsByTagName('domain:name');
     return undef unless $results;
-
-    my $rv = { };
-    while (my $r = $results->shift) {
-        $rv->{$r->textContent} = $r->getAttribute('avail');
+    
+    if ( scalar @domains > 1 ) {
+        my $rv = { };
+        while (my $r = $results->shift) {
+            $rv->{$r->textContent} = $r->getAttribute('avail');
+        }
+        return $rv;
     }
-    return $rv;
+    else {
+        return $results->shift->getAttribute('avail');
+    }
 }
 
 sub domain_info {
