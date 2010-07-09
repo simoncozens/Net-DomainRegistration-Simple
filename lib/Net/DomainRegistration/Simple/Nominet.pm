@@ -6,6 +6,7 @@ use base "Net::DomainRegistration::Simple";
 use Net::EPP::Simple;
 use Time::Piece;
 use Time::Seconds;
+use JSON::XS;
 
 =head1 NAME
 
@@ -119,7 +120,6 @@ sub domain_info {
     my $frame = Net::EPP::Frame::Command::Info::Domain->new();
 
     my $dn = $frame->getNode('domain:info');
-    
     $dn->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
     $dn->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
 
@@ -181,6 +181,144 @@ sub register {
         $args{nameservers} ? (ns => [ @{$args{nameservers}} ]) : (), 
         authInfo => "1234"
     }) or return;
+}
+
+=head2 create_domain
+
+$nominet->create_domain ( name => 'example.co.uk', period => 2,
+    account => { 
+        name => 'Example Company',
+        'trad-name' => 'Trading Name',
+        type => 'Type of Registrant',
+        'co-no' => 'NI123456',
+        'opt-out' => 'N',
+        addr => {
+            street => '2102 High Street',
+            city => 'Oxford',
+            county => 'Oxfordshire',
+            postcode => 'OX1 1DF',
+            country => 'GB'
+        }
+        contact => [
+            {
+                name => 'Mr R. Strant',
+                phone => '01865 123456',
+                email => 'r.strant@example.co.uk'
+            },
+            {
+                name => 'Ms R. Egistrant',
+                phone => '01865 123456',
+                email => 'registrant@example.org.uk'
+            }
+            ]
+    },
+    ns => { host => [
+            {
+                hostName => 'ns0.example.com'
+            },
+            {
+                hostName => 'ns0.example.co.uk',
+                hostAddr => {
+                    ipv4 => '111.123.145.121',
+                    ipv6 => 'abcd::1234'
+                }
+            }
+        ] },
+    'first-bill' => '', 'recur-bill' => '', 'auto-bill' => '',
+    'next-bill' => '', notes => ''
+    );
+
+
+=cut
+
+sub create_domain {
+    my ($self, %args) = @_;
+    $self->_check_create_domain(\%args);   
+
+    my $frame = Net::EPP::Frame::Command::Create::Domain->new();
+
+    my $dc = $frame->getNode('domain:create');
+    $dc->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
+    $dc->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
+
+    $frame->setDomain($args{'domain'});
+    $frame->setPeriod($args{'period'}) if $args{'period'};
+
+    my $da = $frame->createElement('domain:account');
+    if ( $args{account}->{'account-id'} ) {
+        my $e = $frame->createElement('domain:account-id');
+        $e->appendText($args{account}->{'account-id'});
+        $da->addChild($e);
+    }
+    else {
+        my $ac = $frame->createElement('account:create');
+        for my $name (qw/name trad-name type opt-out/) {
+            next unless $args{account}->{$name};
+            my $el = $frame->createElement('account:'.$name);
+            $el->appendText($args{account}->{$name});
+            $ac->addChild($el);
+        }
+        my $addr = $frame->createElement('account:addr');
+        for my $name (qw/street city county postcode country/) {
+            next unless $args{account}->{addr}->{$name};
+            my $el = $frame->createElement('account:'.$name);
+            $el->appendText($args{account}->{addr}->{$name});
+            $addr->addChild($el);
+        }
+        $ac->addChild($addr);
+        
+        my $count = 1;
+        for my $contact (@{$args{account}->{contact}}) {
+            my $c = $frame->createElement('account:contact');
+            $c->setAttribute('order', $count);
+            foreach (qw/name email phone mobile/) {
+                next unless $contact->{$_};
+                my $el = $frame->createElement('contact:'.$_);
+                $el->appendText($contact->{$_});
+                $c->addChild($el);
+            }
+            $ac->addChild($c);
+            $count++;
+        }
+
+        $da->addChild($ac);
+    }
+    $dc->addChild($da);
+
+    if ( $args{'ns'} ) {
+        my $ns = $frame->createElement('domain:ns');
+
+        while ( my $n = shift @{$args{'ns'}->{'host'}} ) {
+            my $host = $frame->createElement('domain:host');
+            my $name = $frame->createElement('domain:hostName');
+            $name->appendText($n->{'hostName'});
+            $host->addChild($name);
+
+            if ( $n->{'hostAddr'} ) {
+                foreach (keys %{$n->{'hostAddr'}}) {
+                    my $addr = $frame->createElement('domain:hostAddr');
+                    $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
+                    $addr->appendText($n->{'hostAddr'}->{$_});
+                    $host->addChild($addr);
+                }
+            }
+        $ns->addChild($host);
+        }
+        $dc->addChild($ns);
+    }
+
+    for my $name (qw/first-bill recur-bill auto-bill next-bill notes/) {
+        next unless $args{$name};
+        my $e = $frame->createElement('domain:'.$name);
+        $e->appendText($args{$name});
+        $dc->addChild($e);
+    }
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef if $code > 1999;
+
+    return 1;
 }
 
 sub renew {

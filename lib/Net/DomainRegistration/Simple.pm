@@ -120,6 +120,11 @@ sub _check_register {
     # XXX Check contact information
 }
 
+sub _check_create_domain {
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
+}
+
 sub _check_renew {
     my ($self, $args) = @_;
     $self->_check_domain($args);
