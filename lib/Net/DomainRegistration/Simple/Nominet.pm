@@ -63,6 +63,43 @@ sub is_available {
     $self->{epp}->check_domain($domain);
 }
 
+=head2 check
+
+    $nominet->check('example.co.uk');
+    $nominet->check(@listOfDomains);
+
+Checks availability of domain(s). Returns a hash ref with each domain
+set to 1 if available or 0 if not available.
+
+=cut
+
+sub check {
+    my ($self, @domains) = @_;
+
+    my $frame = Net::EPP::Frame::Command::Check::Domain->new();
+    my $chk = $frame->getNode('domain:check');
+    $chk->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0');
+    $chk->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
+
+    foreach (@domains) {
+        $frame->addDomain($_);
+    }
+
+    my $answer = $self->{epp}->request($frame);
+    return undef unless $answer;
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef unless $code == 1000;
+
+    my $results = $answer->getElementsByTagName('domain:name');
+    return undef unless $results;
+
+    my $rv = { };
+    while (my $r = $results->shift) {
+        $rv->{$r->textContent} = $r->getAttribute('avail');
+    }
+    return $rv;
+}
+
 sub domain_info {
     my ($self, $domain) = @_;
 
