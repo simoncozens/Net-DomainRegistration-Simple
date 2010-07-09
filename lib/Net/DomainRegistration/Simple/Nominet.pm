@@ -185,7 +185,7 @@ sub register {
 
 =head2 create_domain
 
-$nominet->create_domain ( name => 'example.co.uk', period => 2,
+$nominet->create_domain ( domain => 'example.co.uk', period => 2,
     account => { 
         name => 'Example Company',
         'trad-name' => 'Trading Name',
