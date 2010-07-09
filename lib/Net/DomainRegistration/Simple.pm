@@ -123,6 +123,18 @@ sub _check_register {
 sub _check_create_domain {
     my ($self, $args) = @_;
     $self->_check_domain($args);
+
+    for (qw/name type opt-out/) {
+        croak "You must supply the account $_ parameter" unless $args->{account}->{$_};
+    }
+    for (qw/street city county postcode country/) {
+        croak "You must supply the account address $_ parameter"
+            unless $args->{account}->{addr}->{$_};
+    }
+    for (qw/name email/) {
+        croak "You must supply the account contact $_ parameter" unless
+            $args->{account}->{contact}[0]->{$_};
+    }
 }
 
 sub _check_renew {
