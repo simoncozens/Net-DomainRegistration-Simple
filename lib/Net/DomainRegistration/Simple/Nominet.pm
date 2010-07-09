@@ -1019,10 +1019,14 @@ sub reseller_update {
     return 1;
 }
 
-# The following methods are called by the poll method to handle each type
-# of notice from Nominet. Each method returns a hash with a "notice" key
-# and additional keys specific to the notice type. See the POD for each
-# method below for details.
+=head1 Internal Methods used by poll()
+
+The following methods are called by the poll method to handle each type
+of notice from Nominet. Each method returns a hash with a "notice" key
+and additional keys specific to the notice type. See the POD for each
+method below for details.
+
+=cut
 
 =head2 _abuse_notice
 
@@ -1203,7 +1207,7 @@ sub _poor_quality_notice {
     return %rv;
 }
 
-=head _suspended_domain_notice
+=head2 _suspended_domain_notice
 
 Returns a hash as follows:
 
