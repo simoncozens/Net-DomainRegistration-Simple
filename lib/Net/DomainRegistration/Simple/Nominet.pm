@@ -342,7 +342,7 @@ sub list {
             push @domains, $_->textContent;
         }
     }
-    return @domains;
+    return \@domains;
 }
 
 =head2 taglist
@@ -402,7 +402,7 @@ sub taglist {
 
     return undef unless $self->_reset_connection;
 
-    return @rv;
+    return \@rv;
 }
 
 sub poll {
@@ -434,7 +434,7 @@ sub poll {
         { croak "Unrecognised Nominet notice"; };
     }
 
-    return %rv;
+    return \%rv;
 }
 
 =head2 
@@ -546,7 +546,7 @@ sub handshake {
         push @rv, $_->textContent;
     }
 
-    return @rv;
+    return \@rv;
 }
 
 =head2 create_reseller
@@ -607,6 +607,20 @@ sub create_reseller {
     return 1;
 }
 
+=head2 delete_reseller
+
+    $nominet->delete_reseller( reference => 'RESELLER1' );
+
+Delete a reseller.
+
+Parameters:
+
+    reference : your unique reference for the reseller
+
+Returns 1 on success or undef on failure.
+
+=cut
+
 sub delete_reseller {
     my ($self, %args) = @_;
     $self->_check_delete_reseller(\%args);
@@ -634,6 +648,127 @@ sub delete_reseller {
 
     return undef unless $code == 1000;
     return 1;
+}
+
+=head2 reseller_info
+
+Returns a hash reference containing details of the reseller.
+
+Parameters:
+
+    reference: your unique reference for the reseller
+
+Returns:
+
+    reference: your unique reference for the reseller
+    tradingName : Name of the reseller
+    url : URL for the reseller that customers will be directed to for 
+          support or further information
+    email : email contact for the reseller
+    voice : telephone number contact for the reseller
+
+=cut
+
+sub reseller_info {
+    my ($self, %args) = @_;
+    $self->_check_reseller_info(\%args);
+
+    my %rv = ();
+    $self->_reset_connection('nom-reseller');
+
+    my $frame = Net::EPP::Frame::Command::Info->new();
+
+    my $i = $frame->getNode('info');
+    my $ri = $frame->createElement('reseller:info');
+
+    $ri->setAttribute('xmlns:reseller', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0');
+    $ri->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0 nom-reseller-1.0.xsd');
+
+    my $e = $frame->createElement('reseller:reference');
+    $e->appendText($args{'reference'});
+    $ri->addChild($e);
+
+    $i->addChild($ri);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+
+    $self->_reset_connection();
+
+    return undef unless $code == 1000;
+
+    my $data = $answer->getNode('reseller:infData');
+
+    return $self->_reseller_infData_to_hash($data);
+}
+
+=head2 reseller_list
+
+    $nominet->reseller_list();
+
+Returns an array ref of all resellers. If only reference is returned
+the array elements will be the reference(s) for the reseller(s). If
+more fields are returned the element will be a hash ref containing
+the requested data.
+
+Parameters:
+
+    fields : (optional) if supplied specifies which fields to return if
+             not specified only the reference will be returned.
+
+=cut
+
+sub reseller_list {
+    my ( $self, %args ) = @_;
+
+    $self->_reset_connection('nom-reseller');
+    my $frame = Net::EPP::Frame::Command->new();
+
+    my $c = $frame->getNode('command');
+
+    my $n = $frame->getNode('net');
+    $c->removeChild($n);
+    my $id = $frame->getNode('clTRID');
+    $c->removeChild($id);
+
+    my $info = $frame->createElement('info');
+
+    my $l = $frame->createElement('reseller:list');
+    $l->setAttribute('xmlns:reseller', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0'); 
+    $l->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0 nom-reseller-1.0.xsd');
+
+    $l->setAttribute('fields', $args{fields}) if $args{fields};
+
+    $info->addChild($l);
+    $c->addChild($info);
+
+    $id = $frame->createElement('clTRID');
+    $c->addChild($id);
+
+    my $answer = $self->{epp}->request($frame);
+    
+    $self->_reset_connection();
+
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef unless $code == 1000;
+
+    my $resellers = $answer->getElementsByTagName('reseller:infData');
+
+    my @rv = ();
+
+    if ( $resellers ) {
+        while (my $r = $resellers->shift) {
+            push @rv, $self->_reseller_infData_to_hash($r);
+        }
+    }
+    else {
+        my @resellers = $answer->getElementsByTagName('reseller:reference');
+        for my $r (@resellers) {
+            push @rv, $r->textContent;
+        }
+    }
+
+    return \@rv;
 }
 
 # The following methods are called by the poll method to handle each type
