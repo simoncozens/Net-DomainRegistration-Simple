@@ -187,7 +187,7 @@ sub renew {
     my ($self, %args) = @_;
     $self->_check_renew(\%args);
 
-    my $info = $self->{epp}->domain_info($args{domain}) or return;
+    my $info = $self->domain_info($args{domain}) or return;
     my $d = $info->{exDate};
     $d =~ s/T.*//; # Avoid "garbage at end of string";
     my $t = Time::Piece->strptime($d, "%Y-%m-%d");
@@ -195,8 +195,12 @@ sub renew {
     #XXX
     
     my $frame = Net::EPP::Frame::Command::Renew::Domain->new;
+
+    my $r = $frame->getNode('domain:renew');
+    $r->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
+    $r->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
+
     $frame->setDomain($args{domain});
-    $frame->setCurExpDate($d);
     $frame->setPeriod(2);
     # Grab the new exDate
     my $answer = $self->{epp}->request($frame);
