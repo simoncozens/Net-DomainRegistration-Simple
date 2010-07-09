@@ -771,6 +771,62 @@ sub reseller_list {
     return \@rv;
 }
 
+=head2 reseller_update
+
+    $nominet->reseller_update( reference => 'RESELLER1',
+                               tradingName => 'My Reseller Ltd',
+                               url => 'http://www.example.co.uk/',
+                               email => 'support@example.co.uk',
+                               voice => '+44.02079460123' );
+
+Updates the reseller information. Returns true on success or undef.
+
+Parameters:
+
+    reference : (required) the unique reference for the reseller
+    tradingName : (optional) the name of the reseller
+    url : (optional) the URL for the reseller
+    email : (optional*) email contact for the reseller
+    voice : (optional*) telephone number contact for the reseller
+
+* if either the email or voice parameters are omitted any value currently
+stored for that parameter will be cleared. At least one of either email
+or voice must be supplied.
+
+=cut
+
+sub reseller_update {
+    my ($self, %args) = @_;
+    $self->_check_reseller_update(\%args);
+
+    $self->_reset_connection('nom-reseller');
+
+    my $frame = Net::EPP::Frame::Command::Update->new();
+
+    my $update = $frame->getNode('update');
+
+    my $u = $frame->createElement('reseller:update');
+    $u->setAttribute('xmlns:reseller', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0');
+    $u->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0 nom-reseller-1.0.xsd');
+
+    foreach my $name (qw/reference tradingName url email voice/) {
+        next unless $args{$name};
+        my $e = $frame->createElement('reseller:'.$name);
+        $e->appendText($args{$name});
+        $u->addChild($e);
+    }
+
+    $update->addChild($u);
+
+    my $answer = $self->{epp}->request($frame);
+    
+    $self->_reset_connection();
+
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef unless $code == 1000;
+    return 1;
+}
+
 # The following methods are called by the poll method to handle each type
 # of notice from Nominet. Each method returns a hash with a "notice" key
 # and additional keys specific to the notice type. See the POD for each

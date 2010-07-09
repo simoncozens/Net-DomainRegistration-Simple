@@ -175,6 +175,15 @@ sub _check_reseller_info {
     }
 }
 
+sub _check_reseller_update {
+    my ($self, $args) = @_;
+    croak "You must supply the reference parameter" unless $args->{'reference'};
+
+    if ( ! $args->{email} && ! $args->{voice} ) {
+        croak "You must supply the email or voice parameter";
+    }
+}
+
 sub _ipof {
     my ($self, $name) = @_;
     my $host = scalar gethostbyname($name) or return;
