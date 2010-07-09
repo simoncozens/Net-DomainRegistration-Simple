@@ -603,7 +603,36 @@ sub create_reseller {
     my $code = $self->{epp}->_get_response_code($answer);
     $self->_reset_connection();
 
-    return undef unless $code = 1000;
+    return undef unless $code == 1000;
+    return 1;
+}
+
+sub delete_reseller {
+    my ($self, %args) = @_;
+    $self->_check_delete_reseller(\%args);
+
+    $self->_reset_connection('nom-reseller');
+
+    my $frame = Net::EPP::Frame::Command::Delete->new();
+
+    my $d = $frame->getNode('delete');
+    my $rd = $frame->createElement('reseller:delete');
+
+    $rd->setAttribute('xmlns:reseller', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0');
+    $rd->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-reseller-1.0 nom-reseller-1.0.xsd');
+
+    my $e = $frame->createElement('reseller:reference');
+    $e->appendText($args{'reference'});
+    $rd->addChild($e);
+
+    $d->addChild($rd);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    
+    $self->_reset_connection();
+
+    return undef unless $code == 1000;
     return 1;
 }
 

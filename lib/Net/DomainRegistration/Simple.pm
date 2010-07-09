@@ -161,6 +161,13 @@ sub _check_create_reseller {
     }
 }
 
+sub _check_delete_reseller {
+    my ($self, $args) = @_;
+    for (qw/reference/) {
+        croak "You must supply the $_ parameter" unless $args->{$_};
+    }
+}
+
 sub _ipof {
     my ($self, $name) = @_;
     my $host = scalar gethostbyname($name) or return;
