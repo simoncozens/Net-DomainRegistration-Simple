@@ -1,4 +1,5 @@
 package Net::DomainRegistration::Simple::ResellerClub;
+use Data::Dumper;
 use Carp;
 use LWP::Simple;
 use JSON::XS;
@@ -51,8 +52,9 @@ sub register { return 1 }
 sub is_available { 
     my ($self, $domain) = @_;
     $domain =~ /([^\.]+)\.(.*)/;
-    die $self->_uri("domains/available", "domain-name" => $1, tlds => $2,
+    my $res = $self->_req("domains/available", "domain-name" => $1, tlds => $2,
     "suggest-alternative" => "false");
+    die Dumper $res->{$domain};
 }
 
 sub renew { return 1 }
