@@ -46,7 +46,7 @@ sub _req {
     if ($testing) { warn " > $u \n"; }
     my $res = LWP::Simple::get($u);
     return unless $res;
-    $res = eval  { decode_json($res) };
+    $res = eval  { decode_json($res) } || $res;
     if ($testing) { warn " < ".Dumper($res); }
     return $res;
 }
