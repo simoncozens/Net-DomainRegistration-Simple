@@ -51,21 +51,82 @@ sub _req {
     return $res;
 }
 
+sub _contact_set {
+    my ($self, %args) = @_;
+    my %contacts;
+    my $lastentry;
+    # Propagate entries in this order -> 
+    for (qw/admin technical billing registrant customer /) {
+        my $entry = $args{$_} || $lastentry or next;
+        $lastentry = $entry;
+        my ($cc, $phone) = 
+            ($entry->{phone} =~ /^(?:\+(\d{2})\W(.*))|^(?:()(.*))$/);
+        $contacts{$_} = {
+            name => $entry->{firstname}." ".$entry->{lastname},
+            company => $entry->{company} || "n/a",
+            email => $entry->{email},
+            "address-line-1" => $entry->{address},
+            city => $entry->{city},
+            country => $entry->{country},
+            zipcode => $entry->{postcode},
+            "phone-cc" => $cc,
+            phone => $phone
+        };
+    }
+    return %contacts;
+}
+
+
 sub register { 
-    # We're going to use the same strategy as Nominet here, creating
-    # domain-specific contact records, although there's a separate step
-    # because we have to create a customer as well
     my ($self, %args) = @_;
     $self->_check_register(\%args);
+    my %contacts = $self->_contact_set(%args) or return; 
+
     return if !$self->is_available($args{domain});
 
-    my $id = sprintf("%x", time);
-    my %stuff = $self->_contact_set(%args) or return;
-    $self->{epp}->create_contact({ id => $id, %stuff, authInfo => "1234" }) or return
-
-    return 1 
-
+    # Do we have a customer record for this customer?
+    my $customer = $contacts{customer} || $contacts{registrant} 
+                    || $contacts{admin} || $contacts{billing};
+    my $c_rec = $self->_req("customers/details", username => $customer->{email});
+    unless ($c_rec->{username}) { # Nope, make one
+        $c_rec->{customerid} = $self->_req("customers/signup",
+            username => delete $customer->{email},
+            passwd => genpass(),
+            %$customer
+        );
+        return unless $c_rec->{customerid};
+    }
+    
+    # Do we have a contact for each of the things we're passing in?
+    for (qw/registrant admin billing technical/) {
+        my $search = $self->_req("contacts/search", 
+            "customer-id" => $c_rec->{customerid},
+            "no-of-records" => 10, "page-no" => 1, 
+            email => $contacts{$_}{email}); 
+        
+        my @results = @{$search->{result}};
+        if ($results[0]) {
+            $contacts{$_}{contactid} = $results[0]{"contact.contactid"};
+        } else {
+            $contacts{$_}{contactid} = 
+                $self->_req("contacts/add",
+                    "customer-id" => $c_rec->{customerid},
+                    type => "Contact",
+                    %{$contacts{$_}}
+                );
+        }
+    }           
+    return $self->_req("domains/register", 
+        "domain-name" => $args{domain},
+        years => $args{years} || 1,
+        ns => $args{nameservers},
+        "customer-id" => $c_rec->{customerid},
+        "invoice-option" => "NoInvoice",
+        "protect-privacy" => 1,
+        map {; "$_-contact-id" => $contacts{$_}{contactid} } 
+           qw/registrant admin billing technical/);
 }
+
 sub is_available { 
     my ($self, $domain) = @_;
     $domain =~ /([^\.]+)\.(.*)/;
