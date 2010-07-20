@@ -154,6 +154,8 @@ sub change_contact { return 1 }
 sub set_nameservers { 
     my ($self, %args) = @_;
     $self->_check_set_nameservers(\%args);
+    # Actually, it doesn't want the dots on them.
+    s/\.$// for @{$args{nameservers}};
     my $id = $self->_req("domains/orderid", "domain-name" => $args{domain}) or return;
     $self->_req("domains/modify-ns", "order-id" => $id, ns => $args{nameservers});
 }
