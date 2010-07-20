@@ -76,7 +76,6 @@ sub _contact_set {
     return %contacts;
 }
 
-
 sub register { 
     my ($self, %args) = @_;
     $self->_check_register(\%args);
@@ -151,6 +150,11 @@ options => "OrderDetails") or return;
 }
 sub revoke { return 1 }
 sub change_contact { return 1 }
-sub set_nameservers { return 1 }
 
+sub set_nameservers { 
+    my ($self, %args) = @_;
+    $self->_check_set_nameservers(\%args);
+    my $id = $self->_req("domains/orderid", "domain-name" => $args{domain}) or return;
+    $self->_req("domains/modify-ns", "order-id" => $id, ns => $args{nameservers});
+}
 1;
