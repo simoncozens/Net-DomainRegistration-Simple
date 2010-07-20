@@ -116,7 +116,6 @@ sub register {
                 );
         }
     }           
-    $contacts{req} = delete $contacts{registrant};
     return $self->_req("domains/register", 
         "domain-name" => $args{domain},
         years => $args{years} || 1,
@@ -124,8 +123,10 @@ sub register {
         "customer-id" => $c_rec->{customerid},
         "invoice-option" => "NoInvoice",
         "protect-privacy" => 1,
+        "tech-contact-id" => $contacts{technical}{contactid},
+        "reg-contact-id" => $contacts{registrant}{contactid},
         map {; "$_-contact-id" => $contacts{$_}{contactid} } 
-           qw/reg admin billing technical/);
+           qw/admin billing/);
 }
 
 sub is_available { 
