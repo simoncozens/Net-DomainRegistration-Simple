@@ -148,7 +148,14 @@ options => "OrderDetails") or return;
                     "invoice-option" => $args{invoice} || "NoInvoice"
     );
 }
-sub revoke { return 1 }
+
+sub revoke {
+    my ($self, %args) = @_;
+    $self->_check_domain(\%args);
+    my $id = $self->_req("domains/orderid", "domain-name" => $args{domain}) or return;
+    $self->_req("domains/cancel", "order-id" => $id);
+}
+
 sub change_contact { return 1 }
 
 sub set_nameservers { 
