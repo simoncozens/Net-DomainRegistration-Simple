@@ -17,6 +17,7 @@ WriteMakefile(
         'Time::Piece' => 0,
         'Time::Seconds' => 0,
         'Test::More' => 0,
+        'Socket' => 0,
     },
     dist                => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
     clean               => { FILES => 'Net-DomainRegistration-Simple-*' },

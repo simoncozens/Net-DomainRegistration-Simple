@@ -7,6 +7,7 @@ use Net::EPP::Simple;
 use Time::Piece;
 use Time::Seconds;
 use JSON::XS;
+use Socket;
 
 =head1 NAME
 
@@ -24,7 +25,7 @@ Net::DomainRegistration::Simple::Nominet - Adaptor for Nominet
 
 =head1 DESCRIPTION
 
-See L<Net::DomainRegistration::Simple> for methods; see also
+See L<Net::DomainRegistration::Simple> for simple methods; see also
 L<Net::EPP::Simple>.
 
 Easy to subclass for other EPP-based services by inheriting and
@@ -45,7 +46,7 @@ sub _specialize {
         host => $self->_epp_host, 
         user => $self->{username},
         pass => $self->{password},
-        debug => 1,
+        debug => $self->{debug},
         specialSchema => $schema,
     );
 }
@@ -70,6 +71,103 @@ Returns true is domain is available or false.
 sub is_available {
     my ($self, $domain) = @_;
     $self->check($domain);
+}
+
+
+sub _contact_set {
+    my ($self, %args) = @_;
+    my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
+    return unless $contact;
+    return (
+        postalInfo => {
+            int => {
+                name => $contact->{firstname}." ".$contact->{lastname},
+                org => $contact->{company},
+                addr => {
+                    street => [ $contact->{address} ],
+                    city => $contact->{city},
+                    sp => $contact->{state},
+                    pc => $contact->{postcode},
+                    cc => $contact->{country},
+                }
+            }
+        },
+        voice => $contact->{phone},
+        fax   => $contact->{fax},
+        email => $contact->{email}
+    )
+}
+
+sub register {
+    my ($self, %args) = @_;
+    $self->_check_register(\%args);
+    return if !$self->is_available($args{domain});
+
+    my $c = $args{registrant} || $args{admin};
+    return unless $c;
+
+    # XXX sort out the account and contact sections
+    my $account = {
+        name => $c->{firstname}." ".$c->{lastname},
+        addr => {
+            street => $c->{address},
+            locality => $c->{city},
+            city => $c->{city},
+            county => $c->{state},
+            postcode => $c->{postcode},
+            country => $c->{country}
+        },
+        contact => [ {
+            name => $c->{firstname}." ".$c->{lastname},
+            email => $c->{email},
+            phone => $c->{phone},
+            mobile => $c->{mobile} 
+        } ]
+    };
+    if ( $c->{company} && $c->{company} !~ /n\/a/i ) {
+        $account->{name} = $c->{company}
+    };
+    for ( qw/trad-name type opt-out co-no/ ) {
+        $account->{$_} = $c->{$_};
+    }
+
+    if ( $args{registrant} && $args{admin} ) {
+        push @{$account->{contact}}, {
+            name => $args{admin}->{firstname}." ".$args{admin}->{lastname},
+            email => $args{admin}->{email},
+            phone => $args{admin}->{phone},
+            mobile => $args{admin}->{mobile}
+        };
+    }
+
+    my @ns = ();
+
+    for my $ns (@{$args{nameservers}}) {
+        if ( ref $ns eq 'HASH' ) {
+            push @ns, $ns;
+        }
+        else {
+            push @ns, { hostName => $ns };
+        }
+    }
+
+    my %create = ( domain => $args{domain},
+                   period => $args{period} || 2,
+                   account => $account,
+                   ns => { host => \@ns }
+                   );
+
+    for my $name (qw/recur-bill first-bill auto-bill next-bill notes/) {
+        next unless $args{$name};
+        $create{$name} = $args{$name};
+    }
+
+    $self->create_domain(%create) or return;
+}
+
+sub revoke {
+    my ($self, %args) = @_;
+    return undef; # There is no revoke option for Nominet
 }
 
 =head2 check
@@ -114,6 +212,16 @@ sub check {
     }
 }
 
+=head2 domain_info
+
+    $nominet->domain_info('example.co.uk');
+
+Returns a hash ref containing all available details for the domain
+
+See Nominet documentation for details of returned data
+
+=cut
+
 sub domain_info {
     my ($self, $domain) = @_;
 
@@ -134,53 +242,6 @@ sub domain_info {
     my $infData = $answer->getNode('domain:infData');
 
     return $self->_domain_infData_to_hash($infData);
-}
-
-sub _contact_set {
-    my ($self, %args) = @_;
-    my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
-    return unless $contact;
-    return (
-        postalInfo => {
-            int => {
-                name => $contact->{firstname}." ".$contact->{lastname},
-                org => $contact->{company},
-                addr => {
-                    street => [ $contact->{address} ],
-                    city => $contact->{city},
-                    sp => $contact->{state},
-                    pc => $contact->{postcode},
-                    cc => $contact->{country},
-                }
-            }
-        },
-        voice => $contact->{phone},
-        fax   => $contact->{fax},
-        email => $contact->{email}
-    )
-}
-
-sub register {
-    my ($self, %args) = @_;
-    $self->_check_register(\%args);
-    return if !$self->is_available($args{domain});
-
-    my $id = sprintf("%x", time); # XXX will break on May 10th 584554533311AD
-    my %stuff = $self->_contact_set(%args) or return;
-    $self->{epp}->create_contact({ id => $id, %stuff, authInfo => "1234" }) or return;
-
-    for my $ns (@{$args{nameservers}}) {
-        $self->_ensure_host($ns) or return;
-    }
-
-    $self->{epp}->create_domain({
-        name => $args{domain},
-        registrant => $id,
-        status => "clientTransferProhibited", 
-        period => 2, # No choice about this for Nominet
-        $args{nameservers} ? (ns => [ @{$args{nameservers}} ]) : (), 
-        authInfo => "1234"
-    }) or return;
 }
 
 =head2 create_domain
@@ -237,54 +298,154 @@ sub create_domain {
 
     my $frame = Net::EPP::Frame::Command::Create::Domain->new();
 
-    my $dc = $frame->getNode('domain:create');
+    $self->_make_frame('create', $frame, %args);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef if $code > 1999;
+
+    my $rv = { };
+
+    $rv->{expires} = $answer->getElementsByTagName('domain:exDate')->shift->textContent;
+    $rv->{account}->{'roid'} => $answer->getElementsByTagName('account:roid')->shift->textContent;
+    
+    my @domains = $answer->getElementsByTagName('domain:name');
+    for my $domain (@domains) {
+        push @{$rv->{domains}}, $domain->textContent;
+    }
+
+    $rv->{account}->{roid} = $answer->getElementsByTagName('account:roid')->shift->textContent;
+
+    my @contacts = $answer->getElementsByTagName('account:contact');
+    for my $contact (@contacts) {
+        $rv->{account}->{contacts}->{$contact->getAttribute('order')} = {
+            'roid' => $contact->getElementsByTagName('contact:roid')->shift->textContent,
+            'name' => $contact->getElementsByTagName('contact:name')->shift->textContent
+        }
+    }
+
+    return $rv;
+}
+
+sub delete_domain {
+    my ($self, $domain) = @_;
+    # return unless $self->domain_info($domain);
+
+    my $frame = Net::EPP::Frame::Command::Delete::Domain->new();
+
+    my $delete = $frame->getNode('domain:delete');
+    $delete->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
+    $delete->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
+
+    $frame->setDomain($domain);
+
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+    return undef if $code > 1999;
+
+    return 1;
+}
+
+# _make_frame is used to generate the frame elements and fill them
+# for the create and update methods for domains and accounts
+
+sub _make_frame {
+    # XXX Working on this to make it suitable for create and update ops
+
+    my ( $self, $type, $frame, %args) = @_;
+    return unless $frame && $args{domain};
+
+    my $dc = $frame->getNode('domain:'.$type);
     $dc->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
     $dc->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
 
-    $frame->setDomain($args{'domain'});
-    $frame->setPeriod($args{'period'}) if $args{'period'};
-
-    my $da = $frame->createElement('domain:account');
-    if ( $args{account}->{'account-id'} ) {
-        my $e = $frame->createElement('domain:account-id');
-        $e->appendText($args{account}->{'account-id'});
-        $da->addChild($e);
+    if ( ref $args{domain} eq 'ARRAY' ) {
+        foreach (@{$args{domain}}) {
+            my $d = $frame->createElement('domain:name');
+            $d->appendText($_);
+            $dc->addChild($d);
+        }
     }
-    else {
-        my $ac = $frame->createElement('account:create');
-        for my $name (qw/name trad-name type opt-out/) {
-            next unless $args{account}->{$name};
-            my $el = $frame->createElement('account:'.$name);
-            $el->appendText($args{account}->{$name});
-            $ac->addChild($el);
+    elsif ($args{domain}) {
+        my $d = $frame->createElement('domain:name');
+        $d->appendText($args{domain});
+        $dc->addChild($d);
+    }
+
+    my $p = $frame->createElement('domain:period');
+    $p->appendText($args{'period'});
+    $dc->addChild($p);
+
+    if ( $args{account} ) {
+        my $parent = undef;
+
+        if ( $args{domain} ) {
+            # We know that this is an account section within a domain context
+            $parent = $frame->createElement('domain:account');
         }
-        my $addr = $frame->createElement('account:addr');
-        for my $name (qw/street city county postcode country/) {
-            next unless $args{account}->{addr}->{$name};
-            my $el = $frame->createElement('account:'.$name);
-            $el->appendText($args{account}->{addr}->{$name});
-            $addr->addChild($el);
+        else {
+            # No domain context therefore this is an account update
+            $parent = $frame->createElement('account:update');
         }
-        $ac->addChild($addr);
-        
-        my $count = 1;
-        for my $contact (@{$args{account}->{contact}}) {
-            my $c = $frame->createElement('account:contact');
-            $c->setAttribute('order', $count);
-            foreach (qw/name email phone mobile/) {
-                next unless $contact->{$_};
-                my $el = $frame->createElement('contact:'.$_);
-                $el->appendText($contact->{$_});
-                $c->addChild($el);
+
+        if ( $args{domain} && $args{account}->{'account-id'} ) {
+            my $e = $frame->createElement('domain:account-id');
+            $e->appendText($args{account}->{'account-id'});
+            $parent->addChild($e);
+        }
+        else {
+            my $ac = $frame->createElement('account:'.$type);
+            if ( $type eq 'create' ) {
+                $ac->setAttribute('xmlns:account', 'http://www.nominet.org.uk/epp/xml/nom-account-2.0');
+                $ac->setAttribute('xmlns:contact', 'http://www.nominet.org.uk/epp/xml/nom-contact-2.0');
             }
-            $ac->addChild($c);
-            $count++;
+
+            for my $name (qw/roid name trad-name type co-no opt-out/) {
+                next unless $args{account}->{$name};
+
+                next if $name eq 'roid' && $args{domain};
+                next if $name eq 'name' && ! $args{domain};
+
+                my $el = $frame->createElement('account:'.$name);
+                $el->appendText($args{account}->{$name});
+                $ac->addChild($el);
+            }
+            if ( $args{account}->{addr} ) {
+                my $addr = $frame->createElement('account:addr');
+
+                for my $name (qw/street locality city county postcode country/) {
+                    next unless $args{account}->{addr}->{$name};
+                    my $el = $frame->createElement('account:'.$name);
+                    $el->appendText($args{account}->{addr}->{$name});
+                    $addr->addChild($el);
+                }
+                $ac->addChild($addr);
+        
+                my $count = 1;
+                for my $contact (@{$args{account}->{contact}}) {
+                    my $c = $frame->createElement('account:contact');
+                    $c->setAttribute('order', $count) unless $contact->{roid};
+
+                    my $cc = $frame->createElement('contact:create');
+
+                    foreach (qw/roid name phone mobile email/) {
+                        next unless $contact->{$_};
+                        next if $args{domain} && $contact->{roid};
+
+                        my $el = $frame->createElement('contact:'.$_);
+                        $el->appendText($contact->{$_});
+                        $cc->addChild($el);
+                    }
+                    $c->addChild($cc);
+                    $ac->addChild($c);
+                    $count++;
+                }   
+
+                $parent->addChild($ac);
+            }
+            $dc->addChild($parent);
         }
-
-        $da->addChild($ac);
     }
-    $dc->addChild($da);
-
     if ( $args{'ns'} ) {
         my $ns = $frame->createElement('domain:ns');
 
@@ -294,31 +455,39 @@ sub create_domain {
             $name->appendText($n->{'hostName'});
             $host->addChild($name);
 
-            if ( $n->{'hostAddr'} ) {
-                foreach (keys %{$n->{'hostAddr'}}) {
+            my $domain = $args{'domain'};
+
+            if ( $n->{'hostName'} =~ /$domain/ || ! $self->_ensure_host($n->{'hostName'}) ) {
+                if ( $n->{'hostAddr'} ) {
+                    foreach (keys %{$n->{'hostAddr'}}) {
+                        my $addr = $frame->createElement('domain:hostAddr');
+                        $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
+                        $addr->appendText($n->{'hostAddr'}->{$_});
+                        $host->addChild($addr);
+                    }
+                }
+                elsif ($n->{'hostName'} =~ /\.uk$/) {
                     my $addr = $frame->createElement('domain:hostAddr');
-                    $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
-                    $addr->appendText($n->{'hostAddr'}->{$_});
+                    $addr->setAttribute('ip', 'v4');
+                    $addr->appendText(inet_ntoa(scalar gethostbyname($n->{'hostName'})));
                     $host->addChild($addr);
                 }
             }
-        $ns->addChild($host);
+
+            $ns->addChild($host);
         }
         $dc->addChild($ns);
     }
 
-    for my $name (qw/first-bill recur-bill auto-bill next-bill notes/) {
+    for my $name (qw/first-bill recur-bill auto-bill next-bill notes reseller/) {
         next unless $args{$name};
         my $e = $frame->createElement('domain:'.$name);
         $e->appendText($args{$name});
         $dc->addChild($e);
     }
 
-    my $answer = $self->{epp}->request($frame);
-    my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999;
+    return $dc;
 
-    return 1;
 }
 
 sub renew {
@@ -349,13 +518,6 @@ sub renew {
     $d = $node->textContent;
     $d =~ s/T.*//;
     return $d;
-}
-
-sub revoke {
-    my ($self, %args) = @_;
-    # Check domain
-    $self->_check_domain(\%args);
-    # XXX
 }
 
 sub _get_registrant {
@@ -398,10 +560,6 @@ sub change_contact {
 sub _ensure_host {
     my ($self, $host) = @_;
     if ($self->{epp}->check_host($host) == 0) { return 1; }
-    $self->{epp}->create_host({
-        'name' => $host,
-        addrs => [{ version => "v4", addr => $self->_ip_of($host) }]
-    });
 }
 
 sub set_nameservers {
@@ -1318,7 +1476,7 @@ sub _domain_infData_to_hash {
             push @{$hash->{ns}}, { 
                 name => $name->shift->textContent,
                 addr => $addr->shift->textContent,
-                version => addr->getAttribute('ip')
+                version => $addr->shift->getAttribute('ip')
             };
         }
         else {
@@ -1478,9 +1636,18 @@ sub login {
             $login->svcs->removeChild($obj);
         }
 
-        my $el = $login->createElement('objURI');
-        $el->appendText('http://www.nominet.org.uk/epp/xml/'.$params{specialSchema}.'-'.$schemas{$params{specialSchema}});
-        $login->svcs->appendChild($el);
+        if ( ref $params{specialSchema} eq 'ARRAY' ) {
+            for my $schema (@{$params{specialSchema}}) {
+                my $el = $login->createElement('objURI');
+                $el->appendText('http://www.nominet.org.uk/epp/xml/$schema-'.$schemas{$schema});
+                $login->svcs->appendChild($el);
+            }
+        }
+        else {
+            my $el = $login->createElement('objURI');
+            $el->appendText('http://www.nominet.org.uk/epp/xml/'.$params{specialSchema}.'-'.$schemas{$params{specialSchema}});
+            $login->svcs->appendChild($el);
+        }
     }
 
     $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'extURI');
