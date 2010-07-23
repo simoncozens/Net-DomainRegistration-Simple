@@ -106,7 +106,6 @@ sub register {
     my $c = $args{registrant} || $args{admin};
     return unless $c;
 
-    # XXX sort out the account and contact sections
     my $account = {
         name => $c->{firstname}." ".$c->{lastname},
         addr => {
@@ -157,7 +156,7 @@ sub register {
                    ns => { host => \@ns }
                    );
 
-    for my $name (qw/recur-bill first-bill auto-bill next-bill notes/) {
+    for my $name (qw/recur-bill first-bill auto-bill next-bill notes reseller/) {
         next unless $args{$name};
         $create{$name} = $args{$name};
     }
@@ -446,38 +445,9 @@ sub _make_frame {
             $dc->addChild($parent);
         }
     }
-    if ( $args{'ns'} ) {
-        my $ns = $frame->createElement('domain:ns');
 
-        while ( my $n = shift @{$args{'ns'}->{'host'}} ) {
-            my $host = $frame->createElement('domain:host');
-            my $name = $frame->createElement('domain:hostName');
-            $name->appendText($n->{'hostName'});
-            $host->addChild($name);
-
-            my $domain = $args{'domain'};
-
-            if ( $n->{'hostName'} =~ /$domain/ || ! $self->_ensure_host($n->{'hostName'}) ) {
-                if ( $n->{'hostAddr'} ) {
-                    foreach (keys %{$n->{'hostAddr'}}) {
-                        my $addr = $frame->createElement('domain:hostAddr');
-                        $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
-                        $addr->appendText($n->{'hostAddr'}->{$_});
-                        $host->addChild($addr);
-                    }
-                }
-                elsif ($n->{'hostName'} =~ /\.uk$/) {
-                    my $addr = $frame->createElement('domain:hostAddr');
-                    $addr->setAttribute('ip', 'v4');
-                    $addr->appendText(inet_ntoa(scalar gethostbyname($n->{'hostName'})));
-                    $host->addChild($addr);
-                }
-            }
-
-            $ns->addChild($host);
-        }
-        $dc->addChild($ns);
-    }
+    my $nse = $self->_ns_to_frame($frame, %args);
+    $dc->addChild($nse) if $nse;
 
     for my $name (qw/first-bill recur-bill auto-bill next-bill notes reseller/) {
         next unless $args{$name};
@@ -488,6 +458,41 @@ sub _make_frame {
 
     return $dc;
 
+}
+
+sub _ns_to_frame {
+    my ( $self, $frame, %args) = @_;
+    return unless $frame && $args{'ns'} ;
+
+    my $ns = $frame->createElement('domain:ns');
+
+    while ( my $n = shift @{$args{'ns'}->{'host'}} ) {
+        my $host = $frame->createElement('domain:host');
+        my $name = $frame->createElement('domain:hostName');
+        $name->appendText($n->{'hostName'});
+        $host->addChild($name);
+
+        my $domain = $args{'domain'};
+
+        if ( $n->{'hostName'} =~ /$domain/ || ! $self->_ensure_host($n->{'hostName'}) ) {
+            if ( $n->{'hostAddr'} ) {
+                foreach (keys %{$n->{'hostAddr'}}) {
+                    my $addr = $frame->createElement('domain:hostAddr');
+                    $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
+                    $addr->appendText($n->{'hostAddr'}->{$_});
+                    $host->addChild($addr);
+                }
+            }
+            elsif ($n->{'hostName'} =~ /\.uk$/) {
+                my $addr = $frame->createElement('domain:hostAddr');
+                $addr->setAttribute('ip', 'v4');
+                $addr->appendText(inet_ntoa(scalar gethostbyname($n->{'hostName'})));
+                $host->addChild($addr);
+            }
+        }
+        $ns->addChild($host);
+    }
+    return $ns;
 }
 
 sub renew {
@@ -765,6 +770,7 @@ sub poll {
 
     # XXX Determine action to take based upon the notification type
     my $res = $answer->getNode('resData');
+    return undef unless $res;
     my @notice = $res->childNodes;
 
     my %rv = ();
