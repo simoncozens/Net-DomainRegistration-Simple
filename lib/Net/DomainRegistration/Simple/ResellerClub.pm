@@ -128,6 +128,60 @@ sub register {
            qw/admin billing/);
 }
 
+sub transfer { 
+    my ($self, %args) = @_;
+    $self->_check_transfer(\%args);
+    my %contacts = $self->_contact_set(%args) or return; 
+
+    # The domain cannot be transferred if it is "available" as that
+    # would mean it doesn't exist.
+    return if $self->is_available($args{domain});
+
+    # Do we have a customer record for this customer?
+    my $customer = $contacts{customer} || $contacts{registrant} 
+                    || $contacts{admin} || $contacts{billing};
+    my $c_rec = $self->_req("customers/details", username => $customer->{email});
+    unless ($c_rec->{username}) { # Nope, make one
+        $c_rec->{customerid} = $self->_req("customers/signup",
+            username => delete $customer->{email},
+            passwd => genpass(),
+            %$customer
+        );
+        return unless $c_rec->{customerid};
+    }
+    
+    # Do we have a contact for each of the things we're passing in?
+    for (qw/registrant admin billing technical/) {
+        my $search = $self->_req("contacts/search", 
+            "customer-id" => $c_rec->{customerid},
+            "no-of-records" => 10, "page-no" => 1, 
+            email => $contacts{$_}{email}); 
+        
+        my @results = @{$search->{result}};
+        if ($results[0]) {
+            $contacts{$_}{contactid} = $results[0]{"contact.contactid"};
+        } else {
+            $contacts{$_}{contactid} = 
+                $self->_req("contacts/add",
+                    "customer-id" => $c_rec->{customerid},
+                    type => "Contact",
+                    %{$contacts{$_}}
+                );
+        }
+    }           
+    return $self->_req("domains/transfer", 
+        "domain-name" => $args{domain},
+        "auth-code" => $args{authcode},
+        ns => $args{nameservers},
+        "customer-id" => $c_rec->{customerid},
+        "invoice-option" => "NoInvoice",
+        "protect-privacy" => 1,
+        "tech-contact-id" => $contacts{technical}{contactid},
+        "reg-contact-id" => $contacts{registrant}{contactid},
+        map {; "$_-contact-id" => $contacts{$_}{contactid} } 
+           qw/admin billing/);
+}
+
 sub is_available { 
     my ($self, $domain) = @_;
     $domain =~ /([^\.]+)\.(.*)/;

@@ -120,6 +120,15 @@ sub _check_register {
     # XXX Check contact information
 }
 
+sub _check_transfer {
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
+    
+    croak "You must supply the Transfer Auth Code" unless $args->{authcode};
+
+    # XXX check contact information
+}
+
 sub _check_create_domain {
     my ($self, $args) = @_;
     $self->_check_domain($args);
@@ -154,7 +163,7 @@ sub _check_set_nameservers {
     }
 }
 
-sub _check_transfer {
+sub _check_uk_transfer {
     my ($self, $args) = @_;
     $self->_check_domain($args);
     croak "You must supply the Nominet TAG for the new registrar"

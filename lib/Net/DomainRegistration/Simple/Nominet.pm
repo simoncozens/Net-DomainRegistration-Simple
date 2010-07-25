@@ -815,7 +815,7 @@ transfer before it can complete.
 
 sub transfer {
     my ($self, %args) = @_;
-    $self->_check_transfer(\%args);
+    $self->_check_uk_transfer(\%args);
 
     my $frame = Net::EPP::Frame::Command::Transfer::Domain->new();
 
