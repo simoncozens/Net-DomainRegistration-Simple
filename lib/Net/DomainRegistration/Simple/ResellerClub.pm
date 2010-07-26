@@ -44,7 +44,6 @@ sub _req {
                    "auth-password" => $self->{password},
                    %args);
     if ($testing) { warn " > $u \n"; }
-    warn $u . "\n";
     my $res = LWP::Simple::get($u);
     return unless $res;
     $res = eval  { decode_json($res) } || $res;
