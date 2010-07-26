@@ -44,6 +44,7 @@ sub _req {
                    "auth-password" => $self->{password},
                    %args);
     if ($testing) { warn " > $u \n"; }
+    warn $u . "\n";
     my $res = LWP::Simple::get($u);
     return unless $res;
     $res = eval  { decode_json($res) } || $res;
@@ -220,4 +221,56 @@ sub set_nameservers {
     my $id = $self->_req("domains/orderid", "domain-name" => $args{domain}) or return;
     $self->_req("domains/modify-ns", "order-id" => $id, ns => $args{nameservers});
 }
+
+sub get_auth_code {
+    my ($self, $domain) = @_;
+    $self->_check_domain({ domain => $domain});
+
+    # There isn't a method in the API to retrieve the auth code
+    # so we use the modify-auth-code method to set one according
+    # to our needs
+
+    my $authcode = join '', (0..9, 'A'..'Z', 'a'..'z')[rand 64, rand 64, rand 64, rand 64, rand 64, rand 64, rand 64, rand 64];
+
+    my $orderid = $self->_get_order_id($domain);
+
+    return unless $self->_req("domains/modify-auth-code", "order-id" => $orderid, "auth-code" => $authcode);
+    return $authcode;
+}
+
+sub unlock_domain {
+    my ($self, $domain) = @_;
+
+    return unless $self->_check_domain( {domain => $domain} );
+
+    my $orderid = $self->_get_order_id($domain);
+
+    return unless $self->_req("domains/disable-theft-protection", "order-id" => $orderid);
+    return 1;
+}
+
+sub lock_domain {
+    my ($self, $domain) = @_;
+
+    my $orderid = $self->_get_order_id($domain);
+
+    return unless $self->_req("domains/enable-theft-protection", "order-id" => $orderid);
+    return 1;
+}
+
+sub domain_info {
+    my ($self, $domain) = @_;
+
+    my $orderid = $self->_get_order_id($domain);
+
+    return $self->_req("domains/details", "order-id" => $orderid, options => "All");
+}
+
+sub _get_order_id {
+    my ($self, $domain) = @_;
+    return unless $domain;
+
+    return $self->_req("domains/orderid", "domain-name" => $domain);
+}
+
 1;
