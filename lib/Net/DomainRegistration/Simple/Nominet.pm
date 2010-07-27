@@ -110,7 +110,6 @@ sub register {
         name => $c->{firstname}." ".$c->{lastname},
         addr => {
             street => $c->{address},
-            locality => $c->{city},
             city => $c->{city},
             county => $c->{state},
             postcode => $c->{postcode},
@@ -412,7 +411,7 @@ sub _make_frame {
             if ( $args{account}->{addr} ) {
                 my $addr = $frame->createElement('account:addr');
 
-                for my $name (qw/street locality city county postcode country/) {
+                for my $name (qw/street city county postcode country/) {
                     next unless $args{account}->{addr}->{$name};
                     my $el = $frame->createElement('account:'.$name);
                     $el->appendText($args{account}->{addr}->{$name});
