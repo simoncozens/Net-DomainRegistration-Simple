@@ -2,7 +2,7 @@ package Net::DomainRegistration::Simple::ResellerClub;
 our $testing = 0;
 use Data::Dumper;
 use Carp;
-use LWP::Simple;
+use LWP::UserAgent;
 use JSON::XS;
 use strict;
 use warnings;
@@ -36,17 +36,42 @@ address you use to log into the web site.
 sub _specialize {}
 sub _req {
     my ($self, $path, %args) = @_;
-    my $u = URI->new("https://".
+
+    my $testing = 1;
+
+    my $url = "https://".
     ((defined $self->{environment} and $self->{environment} eq "live") ? 
                         "httpapi.com" : 
-                        "test.httpapi.com")."/api/$path.json");
-    $u->query_form("auth-userid" => $self->{username}, 
-                   "auth-password" => $self->{password},
-                   %args);
-    if ($testing) { warn " > $u \n"; }
-    my $res = LWP::Simple::get($u);
+                        "test.httpapi.com")."/api/$path.json";
+
+
+    my $ua = LWP::UserAgent->new();
+    $ua->timeout(20);
+
+    $args{'auth-userid'} = $self->{username};
+    $args{'auth-password'} = $self->{password};
+
+    my $post_methods = "(register|transfer|renew|modify-ns|add-cns|modify-cns-name|modify-cns-ip|modify-contact|modify-privacy-protection|modify-auth-code|enable-theft-protection|disable-theft-protection|lock-orders|unlock-orders|modify-whois-pref|release|cancel-transfer|delete|restore|trade|add|set-details|add-sponsor|signup|change-password)";
+
+    my $method = "get";
+    if ( $path =~ /$post_methods/ ) {
+        $method = "post";
+    }
+    else {
+        $url .= '?';
+        foreach (keys %args) {
+            $url .= $_ . '=' . $args{$_} . '&';
+        }
+    }
+
+    $method = "post" if $path =~ /$post_methods/;
+
+    if ($testing) { warn " > " . $url; }
+
+    my $res = $ua->$method($url, \%args);
+
     return unless $res;
-    $res = eval  { decode_json($res) } || $res;
+    $res = eval  { decode_json($res->content) } || $res->content;
     if ($testing) { warn " < ".Dumper($res); }
     return $res;
 }
