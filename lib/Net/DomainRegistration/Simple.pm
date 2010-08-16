@@ -158,6 +158,7 @@ sub _check_set_nameservers {
     croak "Nameservers argument should be an array reference"
         unless ref $args->{nameservers} eq "ARRAY";
     for (@{$args->{nameservers}}) {
+        next if ref $_ eq 'HASH';
         $_ = lc $_;
         $_ .= "." unless /\.$/;
     }

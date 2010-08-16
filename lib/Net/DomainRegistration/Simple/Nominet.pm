@@ -145,7 +145,7 @@ sub register {
             push @ns, $ns;
         }
         else {
-            push @ns, { hostName => $ns };
+            push @ns, { name => $ns };
         }
     }
 
@@ -161,6 +161,25 @@ sub register {
     }
 
     $self->create_domain(%create) or return;
+}
+
+sub set_nameservers {
+    my ($self, %args) = @_;
+    $self->_check_set_nameservers(\%args); 
+
+    my @ns = ();
+    for my $ns (@{$args{nameservers}}) {
+        if ( ref $ns eq 'HASH' ) { push @ns, $ns; }
+        else { push @ns, { name => $ns }; }
+    }
+    $args{'ns'}->{'host'} = \@ns;    
+    delete $args{nameservers};
+
+    my $frame = Net::EPP::Frame::Command::Update::Domain->new();
+
+    $self->_make_frame('update', $frame, %args);
+
+    $self->{epp}->request($frame);
 }
 
 sub revoke {
@@ -273,14 +292,12 @@ $nominet->create_domain ( domain => 'example.co.uk', period => 2,
     },
     ns => { host => [
             {
-                hostName => 'ns0.example.com'
+                name => 'ns0.example.com'
             },
             {
-                hostName => 'ns0.example.co.uk',
-                hostAddr => {
-                    ipv4 => '111.123.145.121',
-                    ipv6 => 'abcd::1234'
-                }
+                name => 'ns0.example.co.uk',
+                ipv4 => '111.123.145.121',
+                ipv6 => 'abcd::1234'
             }
         ] },
     'first-bill' => '', 'recur-bill' => '', 'auto-bill' => '',
@@ -305,7 +322,7 @@ sub create_domain {
     my $rv = { };
 
     $rv->{expires} = $answer->getElementsByTagName('domain:exDate')->shift->textContent;
-    $rv->{account}->{'roid'} => $answer->getElementsByTagName('account:roid')->shift->textContent;
+    $rv->{account}->{'roid'} = $answer->getElementsByTagName('account:roid')->shift->textContent;
     
     my @domains = $answer->getElementsByTagName('domain:name');
     for my $domain (@domains) {
@@ -357,6 +374,13 @@ sub _make_frame {
     $dc->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0'); 
     $dc->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-2.0 nom-domain-2.0.xsd');
 
+    if ( $type eq 'update' ) {
+        for (qw/add chg rem/) {
+            my $e = $frame->getNode('domain:'.$_);
+            $dc->removeChild($e) if $e;
+        }
+    }
+
     if ( ref $args{domain} eq 'ARRAY' ) {
         foreach (@{$args{domain}}) {
             my $d = $frame->createElement('domain:name');
@@ -370,9 +394,11 @@ sub _make_frame {
         $dc->addChild($d);
     }
 
-    my $p = $frame->createElement('domain:period');
-    $p->appendText($args{'period'});
-    $dc->addChild($p);
+    if ( $args{period} ) {
+        my $p = $frame->createElement('domain:period');
+        $p->appendText($args{'period'});
+        $dc->addChild($p);
+    }
 
     if ( $args{account} ) {
         my $parent = undef;
@@ -468,24 +494,16 @@ sub _ns_to_frame {
     while ( my $n = shift @{$args{'ns'}->{'host'}} ) {
         my $host = $frame->createElement('domain:host');
         my $name = $frame->createElement('domain:hostName');
-        $name->appendText($n->{'hostName'});
+        $name->appendText($n->{'name'});
         $host->addChild($name);
 
         my $domain = $args{'domain'};
 
-        if ( $n->{'hostName'} =~ /$domain/ || ! $self->_ensure_host($n->{'hostName'}) ) {
-            if ( $n->{'hostAddr'} ) {
-                foreach (keys %{$n->{'hostAddr'}}) {
-                    my $addr = $frame->createElement('domain:hostAddr');
-                    $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
-                    $addr->appendText($n->{'hostAddr'}->{$_});
-                    $host->addChild($addr);
-                }
-            }
-            elsif ($n->{'hostName'} =~ /\.uk$/) {
+        if ( $n->{'ipv4'} || $n->{'ipv6'} ) {
+            foreach (qw/ipv4 ipv6/) {
                 my $addr = $frame->createElement('domain:hostAddr');
-                $addr->setAttribute('ip', 'v4');
-                $addr->appendText(inet_ntoa(scalar gethostbyname($n->{'hostName'})));
+                $addr->setAttribute(substr($_, 0, 2), substr($_, 2, 2));
+                $addr->appendText($n->{$_});
                 $host->addChild($addr);
             }
         }
@@ -564,52 +582,6 @@ sub change_contact {
 sub _ensure_host {
     my ($self, $host) = @_;
     if ($self->{epp}->check_host($host) == 0) { return 1; }
-}
-
-sub set_nameservers {
-    my ($self, %args) = @_;
-    $self->_check_set_nameservers(\%args); 
-
-    # Get the current ones.
-    my $info = $self->{epp}->domain_info($args{domain}) or return;
-    my %current = map {$_=>1} @{$info->{ns}};
-    my %toadd;
-
-    for my $ns (@{$args{nameservers}}) {
-        next if delete $current{$ns};
-        $toadd{$ns}++;
-        $self->_ensure_host($ns) or return;
-        # XXX Need to create a "superordinate host entry"
-    } 
-    
-    # What's left in $current needs to be deleted, and what's left in
-    # $toadd needs to be added
- 
-    my $frame = Net::EPP::Frame::Command::Update::Domain->new();
-    my $name = $frame->setDomain($args{domain});
-
-    my $e = $frame->createElement("domain:ns");
-    for (keys %toadd) {
-        my $a = $frame->createElement("domain:hostObj");
-        s/\.$//;
-        $a->appendText($_);
-        $e->addChild($a);
-    }
-    $frame->add->addChild($e);
-    #$frame->add->parentNode->removeChild($frame->add);
-    $frame->chg->parentNode->removeChild($frame->chg);
-    #$frame->rem->parentNode->removeChild($frame->rem);
-
-    $e = $frame->createElement("domain:ns");
-    for (keys %current) {
-        my $a = $frame->createElement("domain:hostObj");
-        s/\.$//;
-        $a->appendText($_);
-        $e->addChild($a);
-        last;
-    }
-    $frame->rem->addChild($e);
-    $self->{epp}->request($frame);
 }
 
 =head2 list
