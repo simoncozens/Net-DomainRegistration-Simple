@@ -16,10 +16,8 @@ Net::DomainRegistration::Simple::OpenSRS - Adaptor for Tucows OpenSRS
         environment => "live",
         username => $u,
         password => $p,
-        other_auth =>
-            { key => $api_key,
-              master_domain => $my_domain
-            }
+        key => $api_key,
+        master_domain => $my_domain
     );
 
 =head1 DESCRIPTION
@@ -35,7 +33,7 @@ sub _specialize {
     my $srs = $self->{srs} = Net::OpenSRS->new();
     $srs->debug_level(2);
     if ($self->{environment}) { $srs->environment($self->{environment}) }
-    $srs->set_key($self->{other_auth}{api_key});
+    $srs->set_key($self->{api_key});
     # The following line shouldn't be necessary but seems to be
     $srs->{config}->{manage_username} = $self->{username};
     $srs->set_manage_auth($self->{username}, $self->{password});
@@ -47,9 +45,9 @@ sub _specialize {
 
 sub _setmaster {
     my $self = shift;
-    $self->{srs}->master_domain($self->{other_auth}{master_domain});
+    $self->{srs}->master_domain($self->{master_domain});
     $self->{cookie} = $self->{srs}->get_cookie(
-                                $self->{other_auth}{master_domain}
+                                $self->{master_domain}
                       );
 }
 
@@ -165,4 +163,18 @@ sub set_nameservers {
     return $rv->{is_success}
 }
 
+sub domain_info {
+    my ($self, $domain) = @_;
+    $self->{cookie} = $self->{srs}->get_cookie( $args{domain} );
+
+    my $rv = $self->{srs}->make_request({
+        action      => 'get',
+        object      => 'domain',
+        cookie      => $self->{cookie},
+        attributes  => {
+            type    => 'all_info'
+        }
+    });
+    return $rv->{attributes} if $rv->is_success;
+}
 1;

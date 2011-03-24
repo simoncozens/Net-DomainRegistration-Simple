@@ -73,37 +73,15 @@ sub is_available {
     $self->check($domain);
 }
 
-
-sub _contact_set {
-    my ($self, %args) = @_;
-    my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
-    return unless $contact;
-    return (
-        postalInfo => {
-            int => {
-                name => $contact->{firstname}." ".$contact->{lastname},
-                org => $contact->{company},
-                addr => {
-                    street => [ $contact->{address} ],
-                    city => $contact->{city},
-                    sp => $contact->{state},
-                    pc => $contact->{postcode},
-                    cc => $contact->{country},
-                }
-            }
-        },
-        voice => $contact->{phone},
-        fax   => $contact->{fax},
-        email => $contact->{email}
-    )
-}
-
 sub register {
     my ($self, %args) = @_;
     $self->_check_register(\%args);
     return if !$self->is_available($args{domain});
 
     my $c = $args{registrant} || $args{admin};
+
+    warn Dumper($c);
+
     return unless $c;
 
     my $account = {
@@ -160,6 +138,8 @@ sub register {
         $create{$name} = $args{$name};
     }
 
+    warn Dumper(%create);
+
     $self->create_domain(%create) or return;
 }
 
@@ -179,13 +159,73 @@ sub set_nameservers {
 
     $self->_make_frame('update', $frame, %args);
 
+    my $answer = $self->{epp}->request($frame);
+    my $code = $self->{epp}->_get_response_code($answer);
+
+    croak $answer->getNode('domain:reason')->textContent if $code > 1999;
+    return 1 if $code == 1000;
+}
+
+# XXX All this contact stuff is wrong. Nominet have a different model.
+# XXX This needs to be update_account and update_contact for the Nominet
+# XXX model using Nominet EPP
+
+sub change_contact {
+    my ($self, %args) = @_;
+    $self->_check_domain(\%args);
+    my %stuff = $self->_contact_set(%args) or return;
+    my $contact = \%stuff;
+
+    my $frame = Net::EPP::Frame::Command::Update::Contact->new();
+    my $id = $self->_get_registrant($args{domain}) or return;
+    $frame->setContact($id);
+    if (ref($contact->{postalInfo}) eq 'HASH') {
+        foreach my $type (keys(%{$contact->{postalInfo}})) {
+            $frame->Net::EPP::Frame::Command::Create::Contact::addPostalInfo(
+                $type,
+                $contact->{postalInfo}->{$type}->{name},
+                $contact->{postalInfo}->{$type}->{org},
+                $contact->{postalInfo}->{$type}->{addr}
+            );
+        }
+    }
+
+    $frame->Net::EPP::Frame::Command::Create::Contact::setVoice($contact->{voice}) if ($contact->{voice} ne '');
+    $frame->Net::EPP::Frame::Command::Create::Contact::setFax($contact->{fax}) if ($contact->{fax} ne '');
+    $frame->Net::EPP::Frame::Command::Create::Contact::setEmail($contact->{email});
+    $frame->Net::EPP::Frame::Command::Create::Contact::setAuthInfo('1234');
+
+    $frame->rem->parentNode->removeChild($frame->rem);
+    $frame->add->parentNode->removeChild($frame->add);
+    
     $self->{epp}->request($frame);
 }
 
-sub revoke {
+sub _contact_set {
     my ($self, %args) = @_;
-    return undef; # There is no revoke option for Nominet
+    my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
+    return unless $contact;
+    return (
+        postalInfo => {
+            int => {
+                name => $contact->{firstname}." ".$contact->{lastname},
+                org => $contact->{company},
+                addr => {
+                    street => [ $contact->{address} ],
+                    city => $contact->{city},
+                    sp => $contact->{state},
+                    pc => $contact->{postcode},
+                    cc => $contact->{country},
+                }
+            }
+        },
+        voice => $contact->{phone},
+        fax   => $contact->{fax},
+        email => $contact->{email}
+    )
 }
+
+sub revoke { return undef; } # There is no revoke option for Nominet
 
 =head2 check
 
@@ -290,7 +330,8 @@ $nominet->create_domain ( domain => 'example.co.uk', period => 2,
             }
             ]
     },
-    ns => { host => [
+    ns => {
+        host => [
             {
                 name => 'ns0.example.com'
             },
@@ -338,7 +379,6 @@ sub create_domain {
             'name' => $contact->getElementsByTagName('contact:name')->shift->textContent
         }
     }
-
     return $rv;
 }
 
@@ -546,37 +586,6 @@ sub _get_registrant {
     my ($self, $domain) = @_;
     my $info = $self->{epp}->domain_info($domain);
     return $info->{registrant} if $info;
-}
-
-sub change_contact {
-    my ($self, %args) = @_;
-    $self->_check_domain(\%args);
-    my %stuff = $self->_contact_set(%args) or return;
-    my $contact = \%stuff;
-
-    my $frame = Net::EPP::Frame::Command::Update::Contact->new();
-    my $id = $self->_get_registrant($args{domain}) or return;
-    $frame->setContact($id);
-    if (ref($contact->{postalInfo}) eq 'HASH') {
-        foreach my $type (keys(%{$contact->{postalInfo}})) {
-            $frame->Net::EPP::Frame::Command::Create::Contact::addPostalInfo(
-                $type,
-                $contact->{postalInfo}->{$type}->{name},
-                $contact->{postalInfo}->{$type}->{org},
-                $contact->{postalInfo}->{$type}->{addr}
-            );
-        }
-    }
-
-    $frame->Net::EPP::Frame::Command::Create::Contact::setVoice($contact->{voice}) if ($contact->{voice} ne '');
-    $frame->Net::EPP::Frame::Command::Create::Contact::setFax($contact->{fax}) if ($contact->{fax} ne '');
-    $frame->Net::EPP::Frame::Command::Create::Contact::setEmail($contact->{email});
-    $frame->Net::EPP::Frame::Command::Create::Contact::setAuthInfo('1234');
-
-    $frame->rem->parentNode->removeChild($frame->rem);
-    $frame->add->parentNode->removeChild($frame->add);
-    
-    $self->{epp}->request($frame);
 }
 
 sub _ensure_host {
