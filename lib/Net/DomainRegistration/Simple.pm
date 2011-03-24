@@ -25,10 +25,8 @@ our $VERSION = '0.01';
         environment => "live",
         username => $u,
         password => $p,
-        other_auth =>
-            { key => $api_key,
-              master_domain => $my_domain
-            }
+        key => $api_key,
+        master_domain => $my_domain
     );
 
     my $c = {

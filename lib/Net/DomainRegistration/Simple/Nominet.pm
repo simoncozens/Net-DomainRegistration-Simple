@@ -20,7 +20,6 @@ Net::DomainRegistration::Simple::Nominet - Adaptor for Nominet
         environment => "live",
         username => $u,
         password => $p,
-        other_auth => { registrar_contact_id => $cid }
     );
 
 =head1 DESCRIPTION
