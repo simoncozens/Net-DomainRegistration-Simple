@@ -175,6 +175,6 @@ sub domain_info {
             type    => 'all_info'
         }
     });
-    return $rv->{attributes} if $rv->is_success;
+    return $rv->{attributes} if $rv->{is_success};
 }
 1;
