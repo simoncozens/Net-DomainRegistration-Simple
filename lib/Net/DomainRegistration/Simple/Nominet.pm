@@ -772,7 +772,18 @@ sub poll {
     return \%rv;
 }
 
-=head2 
+=head2 release
+
+    $nominet->release( domain => 'example.co.uk',
+                       tag => 'NEWTAG' );
+
+Releases the specified domain to the specified tag
+
+=cut
+
+sub release { goto &transfer; }
+
+=head2 transfer
 
     $nominet->transfer( domain => 'example.co.uk',
                         tag => 'NEWTAG',
