@@ -62,18 +62,27 @@ sub _req {
         foreach (keys %args) {
             $url .= $_ . '=' . $args{$_} . '&';
         }
+        chop $url; # remove trailing &
     }
 
     $method = "post" if $path =~ /$post_methods/;
 
-    if ($testing) { warn " > " . $url; }
+    if ($testing) { warn " > $method : " . $url; }
+    my $res = undef;
+    if ( $method eq 'get' ) {
+        $res = $ua->$method($url); 
+    }
+    else {
+        $res = $ua->$method($url, \%args);
+    }
 
-    my $res = $ua->$method($url, \%args);
+    if ($testing) { warn " < ".Dumper($res); }
+    if ( $res->{'_rc'} > 200 ) { die "Error: ".Dumper($res); }
 
     return unless $res;
-    $res = eval  { decode_json($res->content) } || $res->content;
-    if ($testing) { warn " < ".Dumper($res); }
-    return $res;
+    my $result = eval  { decode_json($res->content) } || $res->content;
+    if ($testing) { warn " < ".Dumper($result); }
+    return $result;
 }
 
 sub _contact_set {
