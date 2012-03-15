@@ -115,16 +115,12 @@ sub _check_list {
 sub _check_register {
     my ($self, $args) = @_;
     $self->_check_domain($args);
-    # XXX Check contact information
 }
 
 sub _check_transfer {
     my ($self, $args) = @_;
     $self->_check_domain($args);
-    
     croak "You must supply the Transfer Auth Code" unless $args->{authcode};
-
-    # XXX check contact information
 }
 
 sub _check_create_domain {
@@ -159,53 +155,6 @@ sub _check_set_nameservers {
         next if ref $_ eq 'HASH';
         $_ = lc $_;
         $_ .= "." unless /\.$/;
-    }
-}
-
-sub _check_uk_transfer {
-    my ($self, $args) = @_;
-    $self->_check_domain($args);
-    croak "You must supply the Nominet TAG for the new registrar"
-        unless $args->{tag};
-}
-
-sub _check_handshake {
-    my ($self, $args) = @_;
-    for ( qw/caseid handshake/ ) {
-        croak "You must supply the $_ parameter" unless $args->{$_};
-    }
-}
-
-sub _check_create_reseller {
-    my ($self, $args) = @_;
-    for (qw/reference tradingName url/) {
-        croak "You must supply the $_ parameter" unless $args->{$_};
-    }
-    if ( ! $args->{email} && ! $args->{voice} ) {
-        croak "You must supply the email or voice parameter";
-    }
-}
-
-sub _check_delete_reseller {
-    my ($self, $args) = @_;
-    for (qw/reference/) {
-        croak "You must supply the $_ parameter" unless $args->{$_};
-    }
-}
-
-sub _check_reseller_info {
-    my ($self, $args) = @_;
-    for (qw/reference/) {
-        croak "You must supply the $_ parameter" unless $args->{$_};
-    }
-}
-
-sub _check_reseller_update {
-    my ($self, $args) = @_;
-    croak "You must supply the reference parameter" unless $args->{'reference'};
-
-    if ( ! $args->{email} && ! $args->{voice} ) {
-        croak "You must supply the email or voice parameter";
     }
 }
 

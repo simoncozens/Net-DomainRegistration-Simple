@@ -80,9 +80,6 @@ sub register {
     return if !$self->is_available($args{domain});
 
     my $c = $args{registrant} || $args{admin};
-
-    warn Dumper($c);
-
     return unless $c;
 
     my $account = {
@@ -138,8 +135,6 @@ sub register {
         next unless $args{$name};
         $create{$name} = $args{$name};
     }
-
-    warn Dumper(%create);
 
     $self->create_domain(%create) or return;
 }
@@ -1449,6 +1444,44 @@ sub _registrar_change_notice {
     }
     return %rv;
 }
+
+sub _check_transfer {
+    my ($self, $args) = @_;
+    $self->_check_domain($args);
+    croak "You must supply the Nominet TAG for the new registrar"
+        unless $args->{tag};
+}
+
+sub _check_handshake {
+    my ($self, $args) = @_;
+    for ( qw/caseid handshake/ ) {
+        croak "You must supply the $_ parameter" unless $args->{$_};
+    }
+}
+
+sub _check_create_reseller {
+    my ($self, $args) = @_;
+    for (qw/reference tradingName url/) {
+        croak "You must supply the $_ parameter" unless $args->{$_};
+    }
+    if ( ! $args->{email} && ! $args->{voice} ) {
+        croak "You must supply the email or voice parameter";
+    }
+}
+
+sub _check_delete_reseller {
+    my ($self, $args) = @_;
+    croak "You must supply the $_ parameter" unless $args->{reference};
+}
+
+sub _check_reseller_update {
+    my ($self, $args) = @_;
+    croak "You must supply the reference parameter" unless $args->{'reference'};
+    if ( ! $args->{email} && ! $args->{voice} ) {
+        croak "You must supply the email or voice parameter";
+    }
+}
+
 
 sub _domain_infData_to_hash {
     my ($self, $infData) = @_;
