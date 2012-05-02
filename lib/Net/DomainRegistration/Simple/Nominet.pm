@@ -552,29 +552,32 @@ sub renew {
     my ($self, %args) = @_;
     $self->_check_renew(\%args);
 
-    my $info = $self->domain_info($args{domain}) or return;
-    my $d = $info->{exDate};
-    $d =~ s/T.*//; # Avoid "garbage at end of string";
-    my $t = Time::Piece->strptime($d, "%Y-%m-%d");
-    return if $t - 180*ONE_DAY > Time::Piece->new;
-    #XXX
-    
+    my $info = $self->domain_info($args{domain});
+    return unless $info;
+    my $exdate = $info->{exDate};
+    $exdate =~ s/T.*//;
+
     my $frame = Net::EPP::Frame::Command::Renew::Domain->new;
-    warn $frame;
 
     my $r = $frame->getNode('domain:renew');
     $r->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
     $r->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     $frame->setDomain($args{domain});
+
+    my $ex = $frame->createElement('domain:curExpDate');
+    $ex->appendText($exdate);
+    $r->addChild($ex);
+
     $frame->setPeriod($args{years});
+
     # Grab the new exDate
     my $answer = $self->{epp}->request($frame);
     my $code = $self->{epp}->_get_response_code($answer);
     return if $code > 1999;
     my $node = $answer->getNode("domain:exDate");
     return unless $node;
-    $d = $node->textContent;
+    my $d = $node->textContent;
     $d =~ s/T.*//;
     return $d;
 }
