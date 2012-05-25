@@ -806,7 +806,7 @@ transfer before it can complete.
 
 sub transfer {
     my ($self, %args) = @_;
-    $self->_check_uk_transfer(\%args);
+    $self->_check_transfer(\%args);
 
     my $frame = Net::EPP::Frame::Command::Transfer::Domain->new();
 
@@ -1579,6 +1579,7 @@ sub _reseller_infData_to_hash {
 
     return $hash;
 }
+
 
 # All this gubbins just to add a couple of "options" to the login frame
 package Net::EPP::Simple::Nominet;
