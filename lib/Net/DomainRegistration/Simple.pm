@@ -67,7 +67,11 @@ sub new {
     return $o;
 }
 
+=head2 is_available
+
 =head2 register
+
+=head2 transfer
 
 =head2 renew
 
@@ -92,6 +96,7 @@ false.
     );
 
 =cut
+
 
 for my $s (qw(register transfer renew revoke change_contact set_nameservers is_available)) {
     no strict;

@@ -110,6 +110,10 @@ sub _contact_set {
     return %contacts;
 }
 
+=head2 register
+
+=cut
+
 sub register { 
     my ($self, %args) = @_;
     $self->_check_register(\%args);
@@ -161,6 +165,10 @@ sub register {
         map {; "$_-contact-id" => $contacts{$_}{contactid} } 
            qw/admin billing/);
 }
+
+=head2 transfer
+
+=cut
 
 sub transfer { 
     my ($self, %args) = @_;
@@ -216,6 +224,16 @@ sub transfer {
            qw/admin billing/);
 }
 
+=head2 is_available 
+
+    if ( $rc->is_available('example.com') ) {
+        ...
+    }
+
+Checks to see if the domain is available
+
+=cut
+
 sub is_available { 
     my ($self, $domain) = @_;
     $domain =~ /([^\.]+)\.(.*)/;
@@ -223,6 +241,14 @@ sub is_available {
     "suggest-alternative" => "false");
     $res->{$domain}{status} eq "available";
 }
+
+=head2 renew
+
+    $rc->renew(domain => 'example.com', years => 2);
+
+Renews the domain registration
+
+=cut
 
 sub renew {
     my ($self, %args) = @_;
@@ -237,6 +263,10 @@ options => "OrderDetails") or return;
     );
 }
 
+=head2 revoke
+
+=cut
+
 sub revoke {
     my ($self, %args) = @_;
     $self->_check_domain(\%args);
@@ -244,7 +274,17 @@ sub revoke {
     $self->_req("domains/cancel", "order-id" => $id);
 }
 
+=head2 change_contact
+
+Does nothing!
+
+=cut
+
 sub change_contact { return 1 }
+
+=head2 set_nameservers
+
+=cut
 
 sub set_nameservers { 
     my ($self, %args) = @_;
@@ -254,6 +294,14 @@ sub set_nameservers {
     my $id = $self->_req("domains/orderid", "domain-name" => $args{domain}) or return;
     $self->_req("domains/modify-ns", "order-id" => $id, ns => $args{nameservers});
 }
+
+=head2 get_auth_code
+
+    $rc->get_auth_code('example.com');
+
+Get an auth code to enable the domain to be transferred to another registrar
+
+=cut
 
 sub get_auth_code {
     my ($self, $domain) = @_;
@@ -271,6 +319,10 @@ sub get_auth_code {
     return $authcode;
 }
 
+=head2 unlock_domain
+
+=cut
+
 sub unlock_domain {
     my ($self, $domain) = @_;
 
@@ -282,6 +334,10 @@ sub unlock_domain {
     return 1;
 }
 
+=head2 lock_domain
+
+=cut
+
 sub lock_domain {
     my ($self, $domain) = @_;
 
@@ -290,6 +346,10 @@ sub lock_domain {
     return unless $self->_req("domains/enable-theft-protection", "order-id" => $orderid);
     return 1;
 }
+
+=head2 domain_info
+
+=cut
 
 sub domain_info {
     my ($self, $domain) = @_;

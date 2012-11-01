@@ -25,6 +25,20 @@ See L<Net::DomainRegistration::Simple> for methods. This module conforms
 to the interface but the methods don't do anything. Useful for testing
 and as a base module.
 
+=head2 is_available
+
+=head2 register
+
+=head2 transfer
+
+=head2 renew
+
+=head2 revoke
+
+=head2 change_contact
+
+=head2 set_nameservers
+
 =cut
 
 sub _specialize { }
@@ -32,6 +46,7 @@ sub _specialize { }
 sub register { return 1 }
 sub is_available { return 1 }
 sub renew { return 1 }
+sub transfer { return 1 }
 sub revoke { return 1 }
 sub change_contact { return 1 }
 sub set_nameservers { return 1 }

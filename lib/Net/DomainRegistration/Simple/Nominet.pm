@@ -75,6 +75,10 @@ sub is_available {
     $self->check($domain);
 }
 
+=head2 register
+
+=cut
+
 sub register {
     my ($self, %args) = @_;
     $self->_check_register(\%args);
@@ -140,6 +144,10 @@ sub register {
     $self->create_domain(%create) or return;
 }
 
+=head2 set_nameservers
+
+=cut
+
 sub set_nameservers {
     my ($self, %args) = @_;
     $self->_check_set_nameservers(\%args); 
@@ -162,6 +170,10 @@ sub set_nameservers {
     croak $answer->getNode('domain:reason')->textContent if $code > 1999;
     return 1 if $code == 1000;
 }
+
+=head2 change_contact
+
+=cut
 
 # XXX All this contact stuff is wrong. Nominet have a different model.
 # XXX This needs to be update_account and update_contact for the Nominet
@@ -221,6 +233,12 @@ sub _contact_set {
         email => $contact->{email}
     )
 }
+
+=head2 revoke
+
+There is no revoke option for Nominet
+
+=cut
 
 sub revoke { return ; } # There is no revoke option for Nominet
 
@@ -377,6 +395,12 @@ sub create_domain {
     }
     return $rv;
 }
+
+=head2 delete_domain
+
+    $nominet->delete_domain('example.co.uk');
+
+=cut
 
 sub delete_domain {
     my ($self, $domain) = @_;
@@ -547,6 +571,14 @@ sub _ns_to_frame {
     }
     return $ns;
 }
+
+=head2 renew
+
+    $nominet->renew( domain => 'example.co.uk', years => 2);
+
+Renews the domain for the given number of years
+
+=cut
 
 sub renew {
     my ($self, %args) = @_;
@@ -739,6 +771,10 @@ sub taglist {
 
     return \@rv;
 }
+
+=head2 poll
+
+=cut
 
 sub poll {
     my ($self) = @_;
