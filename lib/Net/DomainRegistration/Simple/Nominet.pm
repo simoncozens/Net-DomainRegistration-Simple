@@ -56,8 +56,8 @@ sub _specialize {
 sub _reset_connection {
     my ($self, $schema) = @_;
 
-    return undef unless $self->{epp}->logout;
-    return undef unless $self->_specialize( $schema );
+    return unless $self->{epp}->logout;
+    return unless $self->_specialize( $schema );
 
     return 1;
 }
@@ -222,7 +222,7 @@ sub _contact_set {
     )
 }
 
-sub revoke { return undef; } # There is no revoke option for Nominet
+sub revoke { return ; } # There is no revoke option for Nominet
 
 =head2 check
 
@@ -247,12 +247,12 @@ sub check {
     }
 
     my $answer = $self->{epp}->request($frame);
-    return undef unless $answer;
+    return unless $answer;
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef unless $code == 1000;
+    return unless $code == 1000;
 
     my $results = $answer->getElementsByTagName('domain:name');
-    return undef unless $results;
+    return unless $results;
     
     if ( scalar @domains > 1 ) {
         my $rv = { };
@@ -287,7 +287,7 @@ sub domain_info {
     $frame->setDomain($domain);
 
     my $answer = $self->{epp}->request($frame);
-    return undef unless $answer;
+    return unless $answer;
     my $code = $self->{epp}->_get_response_code($answer);
 
     croak "Nominet error $code" if $code > 1999;
@@ -354,7 +354,7 @@ sub create_domain {
 
     my $answer = $self->{epp}->request($frame);
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999;
+    return if $code > 1999;
 
     my $rv = { };
 
@@ -392,7 +392,7 @@ sub delete_domain {
 
     my $answer = $self->{epp}->request($frame);
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999;
+    return if $code > 1999;
 
     return 1;
 }
@@ -659,7 +659,7 @@ sub list {
 
     my $answer = $self->{epp}->request($frame);
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999; # XXX Should be a croak?
+    return if $code > 1999; # XXX Should be a croak?
 
     my @domains = ();
 
@@ -698,7 +698,7 @@ hash reference as follows:
 sub taglist {
     my ($self) = @_;
 
-    return undef unless $self->_reset_connection( 'nom-tag' );
+    return unless $self->_reset_connection( 'nom-tag' );
 
     my $frame = Net::EPP::Frame::Command->new();
 
@@ -722,7 +722,7 @@ sub taglist {
 
     my $answer = $self->{epp}->request($frame);
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999; # XXX Should be a croak?
+    return if $code > 1999; # XXX Should be a croak?
 
     my @rv = ();
     my $tags = $answer->getElementsByTagName('tag:infData');
@@ -735,7 +735,7 @@ sub taglist {
         push @rv, $t;
     }
 
-    return undef unless $self->_reset_connection;
+    return unless $self->_reset_connection;
 
     return \@rv;
 }
@@ -746,11 +746,11 @@ sub poll {
     my $answer = $self->{epp}->request($frame);
 
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999; # XXX Should be a croak?
+    return if $code > 1999; # XXX Should be a croak?
 
     # XXX Determine action to take based upon the notification type
     my $res = $answer->getNode('resData');
-    return undef unless $res;
+    return unless $res;
     my @notice = $res->childNodes;
 
     my %rv = ();
@@ -833,7 +833,7 @@ sub transfer {
     my $answer = $self->{epp}->request($frame);
 
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef if $code > 1999;
+    return if $code > 1999;
     return $code;
 }
 
@@ -878,12 +878,12 @@ sub handshake {
     my $code = $self->{epp}->_get_response_code($answer);
 
     # XXX This really should croak as it's an error condition
-    return undef if $code > 1999;
+    return if $code > 1999;
 
     my $dl = $answer->getNode('n:domainList');
-    return undef unless $dl;
+    return unless $dl;
     my $dc = $dl->getElementsByLocalName('n:no-domains');
-    return undef unless $dc->textContent > 0;
+    return unless $dc->textContent > 0;
 
     my @domains = $dl->getElementsByLocalName('n:domain-name');
 
@@ -949,7 +949,7 @@ sub create_reseller {
     my $code = $self->{epp}->_get_response_code($answer);
     $self->_reset_connection();
 
-    return undef unless $code == 1000;
+    return unless $code == 1000;
     return 1;
 }
 
@@ -992,7 +992,7 @@ sub delete_reseller {
     
     $self->_reset_connection();
 
-    return undef unless $code == 1000;
+    return unless $code == 1000;
     return 1;
 }
 
@@ -1041,7 +1041,7 @@ sub reseller_info {
 
     $self->_reset_connection();
 
-    return undef unless $code == 1000;
+    return unless $code == 1000;
 
     my $data = $answer->getNode('reseller:infData');
 
@@ -1096,7 +1096,7 @@ sub reseller_list {
     $self->_reset_connection();
 
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef unless $code == 1000;
+    return unless $code == 1000;
 
     my $resellers = $answer->getElementsByTagName('reseller:infData');
 
@@ -1169,7 +1169,7 @@ sub reseller_update {
     $self->_reset_connection();
 
     my $code = $self->{epp}->_get_response_code($answer);
-    return undef unless $code == 1000;
+    return unless $code == 1000;
     return 1;
 }
 
@@ -1605,7 +1605,7 @@ sub new {
 
     bless($self, $package);
 
-    return undef unless $self->login(%params);
+    return unless $self->login(%params);
     return $self;
 }
 
@@ -1712,7 +1712,7 @@ sub login {
 
     if ($Code > 1999) {
         $Error = "Error logging in (response code $Code)";
-        return undef;
+        return;
     }
 
     return 1;
