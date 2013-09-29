@@ -5,6 +5,8 @@ README
 lib/Net/DomainRegistration/Simple.pm
 lib/Net/DomainRegistration/Simple/Dummy.pm
 lib/Net/DomainRegistration/Simple/OpenSRS.pm
+lib/Net/DomainRegistration/Simple/Nominet.pm
+lib/Net/DomainRegistration/Simple/ResellerClub.pm
 t/00-load.t
 t/pod-coverage.t
 t/pod.t

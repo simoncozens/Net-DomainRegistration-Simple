@@ -257,8 +257,6 @@ sub check {
 
     my $frame = Net::EPP::Frame::Command::Check::Domain->new();
     my $chk = $frame->getNode('domain:check');
-    $chk->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $chk->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     foreach (@domains) {
         $frame->addDomain($_);
@@ -299,8 +297,6 @@ sub domain_info {
 
     my $frame = Net::EPP::Frame::Command::Info::Domain->new();
     my $dn = $frame->getNode('domain:info');
-    $dn->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $dn->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     $frame->setDomain($domain);
 
@@ -409,8 +405,6 @@ sub delete_domain {
     my $frame = Net::EPP::Frame::Command::Delete::Domain->new();
 
     my $dn = $frame->getNode('domain:delete');
-    $dn->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $dn->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     $frame->setDomain($dn);
 
@@ -431,8 +425,6 @@ sub _make_frame {
     return unless $frame && $args{domain};
 
     my $dc = $frame->getNode('domain:'.$type);
-    $dc->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $dc->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     if ( $type eq 'update' ) {
         for (qw/add chg rem/) {
@@ -592,8 +584,6 @@ sub renew {
     my $frame = Net::EPP::Frame::Command::Renew::Domain->new;
 
     my $r = $frame->getNode('domain:renew');
-    $r->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $r->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     $frame->setDomain($args{domain});
 
@@ -673,8 +663,6 @@ sub list {
     my $info = $frame->createElement('info');
 
     my $dl = $frame->createElement('domain:list');
-    $dl->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $dl->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     for (qw/month expiry fields/) {
         next unless $args{$_};
@@ -819,6 +807,11 @@ Releases the specified domain to the specified tag
 =cut
 
 sub release { goto &transfer; }
+sub release {
+    my ($self, %args) = @_;
+
+    my $frame = Net::EPP::Frame::Command::Release::Domain->new();
+}
 
 =head2 transfer
 
@@ -847,8 +840,6 @@ sub transfer {
     my $frame = Net::EPP::Frame::Command::Transfer::Domain->new();
 
     my $transfer = $frame->getNode('domain:transfer');
-    $transfer->setAttribute('xmlns:domain', 'http://www.nominet.org.uk/epp/xml/nom-domain-' . $schemas{'nom-domain'});
-    $transfer->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/nom-domain-'.$schemas{'nom-domain'}.' nom-domain-'.$schemas{'nom-domain'}.'.xsd');
 
     $frame->setOp('request');
     $frame->setDomain($args{domain});
@@ -1536,23 +1527,10 @@ sub _domain_infData_to_hash {
         next unless $infData->getElementsByTagName('domain:'.$name)->shift->textContent;
         next unless $hash->{$name} = $infData->getElementsByTagName('domain:'.$name)->shift->textContent;
     }
-    $hash->{status} = $infData->getChildrenByTagName('domain:reg-status')->shift->textContent;
-
-    my @ns = $infData->getElementsByTagName('domain:host');
+    my @ns = $infData->getElementsByTagName('domain:ns');
     foreach my $host ( @ns ) {
-        my $name = $host->getChildrenByTagName('domain:hostName');
-        my $addr = $host->getChildrenByTagName('domain:hostAddr');
-
-        if ( $addr ) {
-            push @{$hash->{ns}}, { 
-                name => $name->shift->textContent,
-                addr => $addr->shift->textContent,
-                version => $addr->shift->getAttribute('ip')
-            };
-        }
-        else {
-            push @{$hash->{ns}}, { name => $name->shift->textContent };
-        }
+        my $name = $host->getChildrenByTagName('domain:hostObj');
+        push @{$hash->{ns}}, { name => $name->shift->textContent };
     }
 
     return $hash;
@@ -1574,7 +1552,7 @@ sub _account_infData_to_hash {
     }
 
     my $address = $infData->getElementsByTagName('account:addr');
-    my @addr = $address->shift->getChildrenByTagName('*');
+    my @addr = $address ? $address->shift->getChildrenByTagName('*') : ();
     foreach ( @addr ) {
         my $name = $_->nodeName;
         $name =~ s/account:(.*)/$1/;
@@ -1683,12 +1661,13 @@ sub login {
     while (my $object = $objects->shift) {
         # Don't ignore the Nominet schemas - we need them!
         if ( $object->firstChild->data =~ /^http:\/\/www.nominet.org.uk\/epp\/xml\/(.*)-([\d\.]+)/ ) {
+            $self->debug( $2 );
             next if $schemas{$1} > $2; # XXX we only want the latest one
             $schemas{$1} = $2;
             next;
         }
         # We only need the host schema from the non-Nominet ones
-        next unless $object->firstChild->data =~ /^urn:ietf:params:xml:ns:host/;
+        next unless $object->firstChild->data =~ /^urn:ietf:params:xml:ns:/;
 
         my $el = $login->createElement('objURI');
         $el->appendText($object->firstChild->data);

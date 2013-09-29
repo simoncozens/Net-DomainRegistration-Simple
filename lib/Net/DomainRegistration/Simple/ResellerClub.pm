@@ -37,8 +37,6 @@ sub _specialize {}
 sub _req {
     my ($self, $path, %args) = @_;
 
-    my $testing = 1;
-
     my $url = "https://".
     ((defined $self->{environment} and $self->{environment} eq "live") ? 
                         "httpapi.com" : 
@@ -326,7 +324,7 @@ sub get_auth_code {
 sub unlock_domain {
     my ($self, $domain) = @_;
 
-    return unless $self->_check_domain( {domain => $domain} );
+    # die "Domain not valid"  unless $self->_check_domain( {domain => $domain} );
 
     my $orderid = $self->_get_order_id($domain);
 
