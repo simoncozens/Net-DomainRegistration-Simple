@@ -807,11 +807,6 @@ Releases the specified domain to the specified tag
 =cut
 
 sub release { goto &transfer; }
-sub release {
-    my ($self, %args) = @_;
-
-    my $frame = Net::EPP::Frame::Command::Release::Domain->new();
-}
 
 =head2 transfer
 
@@ -839,14 +834,27 @@ sub transfer {
 
     my $frame = Net::EPP::Frame::Command::Transfer::Domain->new();
 
-    my $transfer = $frame->getNode('domain:transfer');
+    my $transfer = $frame->getNode('command');
+    my $update = $frame->createElement('update');
 
-    $frame->setOp('request');
-    $frame->setDomain($args{domain});
+    my $release = $frame->createElement('r:release');
+    $release->setAttribute('xmlns:r', 'http://www.nominet.org.uk/epp/xml/std-release-'.$schemas{'std-release'});
+    $release->setAttribute('xsi:schemaLocation', 'http://www.nominet.org.uk/epp/xml/std-release-'.$schemas{'std-release'}.' std-release-'.$schemas{'std-release'}.'.xsd');
 
-    my $tag = $frame->createElement('domain:registrar-tag');
+    my $domain = $frame->createElement('r:domainName');
+    $domain->appendText($args{domain});
+
+    my $tag = $frame->createElement('r:registrarTag');
     $tag->appendText($args{tag});
-    $transfer->addChild($tag);
+
+    $release->addChild($domain);
+    $release->addChild($tag);
+
+    $update->addChild($release);
+    $transfer->addChild($update);
+
+    my $to_remove = $frame->getNode('transfer');
+    $transfer->removeChild($to_remove);
 
     if ( $args{account} ) {
         my $a = $frame->createElement('domain:account-id');
@@ -856,6 +864,10 @@ sub transfer {
         $e->addChild($a);
         $transfer->addChild($e);
     }
+
+    # Move the clTRID element to the end of the block
+    my $clTRID = $frame->getNode('clTRID');
+    $transfer->addChild($clTRID);
 
     my $answer = $self->{epp}->request($frame);
 
@@ -1655,20 +1667,36 @@ sub login {
     $v->appendText($self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'version')->shift->firstChild->data);
     $l->appendText($self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'lang')->shift->firstChild->data);
 
-    my $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'objURI');
-
     %schemas = ();
+
+    my $objects = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'objURI');
     while (my $object = $objects->shift) {
         # Don't ignore the Nominet schemas - we need them!
         if ( $object->firstChild->data =~ /^http:\/\/www.nominet.org.uk\/epp\/xml\/(.*)-([\d\.]+)/ ) {
-            $self->debug( $2 );
-            next if $schemas{$1} > $2; # XXX we only want the latest one
+            $self->debug( "Nominet Schema: $1 -  $2" );
+
+            # we only want the latest one
+            next if $schemas{$1} > $2;
+
             $schemas{$1} = $2;
             next;
         }
-        # We only need the host schema from the non-Nominet ones
         next unless $object->firstChild->data =~ /^urn:ietf:params:xml:ns:/;
 
+        my $el = $login->createElement('objURI');
+        $el->appendText($object->firstChild->data);
+        $login->svcs->appendChild($el);
+    }
+
+    # We also need to get the extension schemas
+    my $extensions = $self->{greeting}->getElementsByTagNameNS(EPP_XMLNS, 'extURI');
+    while (my $object = $extensions->shift) {
+        if ( $object->firstChild->data =~ /^http:\/\/www.nominet.org.uk\/epp\/xml\/(.*)-([\d\.]+)/ ) {
+            $self->debug( "Nominet Schema: $1 -  $2" );
+            next if $schemas{$1} > $2;
+            $schemas{$1} = $2;
+            next;
+        }
         my $el = $login->createElement('objURI');
         $el->appendText($object->firstChild->data);
         $login->svcs->appendChild($el);
@@ -1677,6 +1705,7 @@ sub login {
     for ('nom-domain', 
          'nom-notifications',
          'nom-abuse-feed',
+         'std-release',
         ) {
         next unless $schemas{$_};
         my $el = $login->createElement('objURI');
