@@ -216,7 +216,7 @@ sub _contact_set {
     return unless $contact;
     return (
         postalInfo => {
-            int => {
+            loc => {
                 name => $contact->{firstname}." ".$contact->{lastname},
                 org => $contact->{company},
                 addr => {
