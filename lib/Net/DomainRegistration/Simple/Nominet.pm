@@ -212,7 +212,7 @@ sub change_contact {
 
 sub _contact_set {
     my ($self, %args) = @_;
-    my $contact = $args{registrant} || $args{technical} || $args{admin} || $args{billing};
+    my $contact = $args{registrant} || $args{admin} || $args{technical} || $args{billing};
     return unless $contact;
     return (
         postalInfo => {
